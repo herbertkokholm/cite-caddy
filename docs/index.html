@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zotero-mcp</title>
+  <meta name="description"
+    content="A standalone, remote MCP server giving full read/write access to a Zotero library — search, add, tag, update, delete, and move items, gated by a first-party OAuth 2.1 flow.">
+  <style>
+    :root,
+    :root[data-theme="dark"] {
+      --bg: #0f1420;
+      --panel: #171e2e;
+      --card: #1c2740;
+      --card2: #18223a;
+      --ink: #e8edf6;
+      --muted: #93a1c0;
+      --line: #2b3958;
+      --accent: #5b8cff;
+      --header-g1: #141b2b;
+      --header-g2: #101623;
+      --input-bg: #0d1420;
+      --hover-line: #3d5680;
+      --pill-safe-bg: #123a24;
+      --pill-safe-fg: #7fe3a0;
+      --pill-safe-border: #1d5c39;
+      --pill-danger-bg: #3a1620;
+      --pill-danger-fg: #ff9db0;
+      --pill-danger-border: #5c1d2e;
+      --pill-read-bg: #16233d;
+      --pill-read-fg: #9db8ff;
+      --pill-read-border: #253a63;
+      --date-fg: #6f7fa2;
+      --tb-fg: #0c1018;
+      --footer-fg: #5f6f90;
+      --footer-link: #8fa8d8;
+      --code-bg: #0d1420;
+      --code-fg: #cfe0ff;
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --card: #ffffff;
+      --card2: #eef1f8;
+      --ink: #1a2233;
+      --muted: #5a6a8a;
+      --line: #dbe1ee;
+      --accent: #3a63d8;
+      --header-g1: #ffffff;
+      --header-g2: #eef1f8;
+      --input-bg: #ffffff;
+      --hover-line: #b7c3de;
+      --pill-safe-bg: #e2f7ea;
+      --pill-safe-fg: #1f8a4c;
+      --pill-safe-border: #b6e6c7;
+      --pill-danger-bg: #fbe6ea;
+      --pill-danger-fg: #b23b53;
+      --pill-danger-border: #f0c3cd;
+      --pill-read-bg: #e8eefc;
+      --pill-read-fg: #3a5aa8;
+      --pill-read-border: #cddaf5;
+      --date-fg: #6b7aa0;
+      --tb-fg: #0c1018;
+      --footer-fg: #7583a3;
+      --footer-link: #3a5aa8;
+      --code-bg: #eef1f8;
+      --code-fg: #1a3f99;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      transition: background .15s, color .15s
+    }
+
+    a {
+      color: var(--footer-link)
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(180deg, var(--header-g1), var(--header-g2));
+      border-bottom: 1px solid var(--line);
+      padding: 14px 24px
+    }
+
+    .htop {
+      max-width: 980px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 16px
+    }
+
+    .htop h1 {
+      font-size: 16px;
+      margin: 0;
+      font-weight: 650;
+      letter-spacing: .2px;
+      flex: 1
+    }
+
+    .htop nav {
+      display: flex;
+      gap: 18px;
+      font-size: 13.5px
+    }
+
+    .htop nav a {
+      color: var(--muted);
+      text-decoration: none
+    }
+
+    .htop nav a:hover {
+      color: var(--ink)
+    }
+
+    #themetog {
+      background: var(--input-bg);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      padding: 7px 11px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      cursor: pointer
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 24px
+    }
+
+    .hero {
+      padding: 64px 0 48px;
+      text-align: center
+    }
+
+    .hero h2 {
+      font-size: clamp(28px, 4.5vw, 42px);
+      margin: 0 0 14px;
+      font-weight: 700;
+      letter-spacing: -.3px;
+      line-height: 1.15
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 640px;
+      margin: 0 auto 30px;
+      line-height: 1.55
+    }
+
+    .cta {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 11px 22px;
+      border-radius: 10px;
+      font-size: 14.5px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid transparent
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      color: #fff
+    }
+
+    .btn.ghost {
+      background: var(--input-bg);
+      color: var(--ink);
+      border-color: var(--line)
+    }
+
+    .btn.ghost:hover {
+      border-color: var(--hover-line)
+    }
+
+    section {
+      padding: 44px 0;
+      border-top: 1px solid var(--line)
+    }
+
+    section h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      margin: 0 0 8px;
+      font-weight: 700
+    }
+
+    section h4 {
+      font-size: 24px;
+      margin: 0 0 14px;
+      font-weight: 700;
+      letter-spacing: -.2px
+    }
+
+    section p.lead {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 680px
+    }
+
+    .flow {
+      display: flex;
+      gap: 0;
+      align-items: stretch;
+      flex-wrap: wrap;
+      margin-top: 28px
+    }
+
+    .flow .step {
+      flex: 1;
+      min-width: 190px;
+      background: linear-gradient(180deg, var(--card), var(--card2));
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 16px 18px;
+      margin: 6px
+    }
+
+    .flow .step b {
+      display: block;
+      font-size: 13.5px;
+      margin-bottom: 5px
+    }
+
+    .flow .step span {
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.5
+    }
+
+    .flow .arrow {
+      align-self: center;
+      color: var(--muted);
+      font-size: 20px;
+      padding: 0 4px
+    }
+
+    .mock {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 13px;
+      margin-top: 24px
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--card), var(--card2));
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 14px 15px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative
+    }
+
+    .card .stripe {
+      position: absolute;
+      left: 0;
+      top: 13px;
+      bottom: 13px;
+      width: 4px;
+      border-radius: 4px
+    }
+
+    .card .tt {
+      font-size: 13.5px;
+      font-weight: 600;
+      line-height: 1.34;
+      padding-left: 8px;
+      font-family: "SF Mono", Menlo, Consolas, monospace
+    }
+
+    .card .auth {
+      font-size: 11.5px;
+      color: var(--muted);
+      padding-left: 8px;
+      line-height: 1.5
+    }
+
+    .card .meta {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      padding-left: 8px
+    }
+
+    .pill {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 11px;
+      font-weight: 600;
+      letter-spacing: .3px;
+      text-transform: uppercase
+    }
+
+    .pill.read {
+      background: var(--pill-read-bg);
+      color: var(--pill-read-fg);
+      border: 1px solid var(--pill-read-border)
+    }
+
+    .pill.safe {
+      background: var(--pill-safe-bg);
+      color: var(--pill-safe-fg);
+      border: 1px solid var(--pill-safe-border)
+    }
+
+    .pill.danger {
+      background: var(--pill-danger-bg);
+      color: var(--pill-danger-fg);
+      border: 1px solid var(--pill-danger-border)
+    }
+
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 24px
+    }
+
+    .feat {
+      padding: 0
+    }
+
+    .feat b {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px
+    }
+
+    .feat span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55
+    }
+
+    .mcp-panel {
+      background: linear-gradient(180deg, var(--card), var(--card2));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 22px 24px;
+      margin-top: 24px
+    }
+
+    .mcp-panel h5 {
+      font-size: 14px;
+      margin: 0 0 10px
+    }
+
+    .mcp-panel ol {
+      margin: 0 0 4px;
+      padding-left: 20px;
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.7
+    }
+
+    code,
+    pre {
+      font-family: "SF Mono", Menlo, Consolas, monospace
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 12px 14px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      overflow-x: auto;
+      margin: 10px 0 18px
+    }
+
+    .mcp-tools {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 10px;
+      margin-top: 6px
+    }
+
+    .mcp-tools div {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 10px 12px
+    }
+
+    .mcp-tools code {
+      font-size: 12px;
+      color: var(--accent)
+    }
+
+    .mcp-tools span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+      line-height: 1.4
+    }
+
+    .pgrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 24px
+    }
+
+    .pcard {
+      background: linear-gradient(180deg, var(--card), var(--card2));
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 16px 18px
+    }
+
+    .pcard b {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 7px
+    }
+
+    .pcard span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55
+    }
+
+    footer {
+      color: var(--footer-fg);
+      font-size: 12px;
+      text-align: center;
+      padding: 36px 24px 44px;
+      border-top: 1px solid var(--line);
+      margin-top: 20px
+    }
+
+    footer a {
+      color: var(--footer-link)
+    }
+
+    footer .links {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap
+    }
+  </style>
+  <script>
+    (function () {
+      var saved = localStorage.getItem('zmcp-theme');
+      var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+</head>
+
+<body>
+
+  <header>
+    <div class="htop">
+      <h1>zotero-mcp</h1>
+      <nav>
+        <a href="#mcp">MCP</a>
+        <a href="#features">Features</a>
+        <a href="#safety">Key safety</a>
+        <a href="https://github.com/herbertkokholm/zotero-mcp" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <button id="themetog" type="button">Light</button>
+    </div>
+  </header>
+
+  <div class="hero wrap">
+    <h2>Full read/write access to your Zotero library —<br>for your own Claude, over MCP.</h2>
+    <p>A standalone, remote MCP server that turns Zotero into something your AI
+      client can act on directly: search, create, tag, update — even delete and
+      move, with real safeguards. Nothing to install locally, gated by a first-party
+      OAuth 2.1 flow built into the server itself.</p>
+    <div class="cta">
+      <a class="btn primary" href="#mcp">Connect via MCP</a>
+      <a class="btn ghost" href="#safety">Key safety model</a>
+      <a class="btn ghost" href="https://github.com/herbertkokholm/zotero-mcp" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <section>
+      <h3>How it works</h3>
+      <h4>One login, then tool calls go straight through to Zotero</h4>
+      <p class="lead">There's exactly one resource owner, so <code>/authorize</code>
+        doesn't delegate to a third-party identity provider — it's a first-party
+        login form checked against a username/password configured on the server.</p>
+      <div class="flow">
+        <div class="step"><b>1. Add custom connector</b><span>The MCP client points at the server's public URL and
+            self-registers via dynamic client registration (RFC 7591) — no manual app setup.</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>2. First-party login</b><span>The authorization screen is this app's own login form, not a
+            third-party IdP. Logging in is what actually gates access.</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>3. Tool calls → Zotero</b><span>Authenticated calls proxy straight to the Zotero Web API
+            using a write-scoped key configured server-side.</span></div>
+      </div>
+
+      <div class="mock">
+        <div class="card">
+          <div class="stripe" style="background:#9db8ff"></div>
+          <div class="meta"><span class="pill read">Read-only</span></div>
+          <div class="tt">search_items(query)</div>
+          <div class="auth">Search the connected library by title, creator, tag, or identifier.</div>
+        </div>
+        <div class="card">
+          <div class="stripe" style="background:#7fe3a0"></div>
+          <div class="meta"><span class="pill safe">Safe write</span></div>
+          <div class="tt">add_tags(key, version, tags)</div>
+          <div class="auth">Key-preserving — never breaks a Word citation to this item.</div>
+        </div>
+        <div class="card">
+          <div class="stripe" style="background:#ff9db0"></div>
+          <div class="meta"><span class="pill danger">Destructive</span></div>
+          <div class="tt">delete_item_permanently(key, version)</div>
+          <div class="auth">Refuses the call if <code>version</code> is stale — no silent overwrite.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="mcp">
+      <h3>MCP access</h3>
+      <h4>Point your own Claude at the server</h4>
+      <p class="lead">Add it as a remote MCP connector directly — the OAuth flow
+        prompts for username/password in-browser, nothing to configure by hand.</p>
+
+      <div class="mcp-panel">
+        <h5>Claude Desktop</h5>
+        <ol>
+          <li>Settings → Connectors → Add → "Add custom connector"</li>
+          <li>Paste the server's public URL with <code>/mcp</code> appended</li>
+        </ol>
+        <pre>https://your-domain.example/mcp</pre>
+
+        <h5>Claude Code</h5>
+        <pre>claude mcp add --transport http zotero \
+  https://your-domain.example/mcp</pre>
+
+        <h5>Available tools</h5>
+        <div class="mcp-tools">
+          <div><code>search_items / get_item / list_collections</code><span>Read-only lookups against the connected
+              library</span></div>
+          <div><code>create_item / update_item</code><span>Add new items or edit fields — always key-preserving</span>
+          </div>
+          <div><code>add_tags / remove_tags / set_tags</code><span>Manage tags without touching the item's key</span>
+          </div>
+          <div><code>add_to_collection / remove_from_collection</code><span>Reorganize safely, in-library only</span>
+          </div>
+          <div><code>create_collection</code><span>Add a new collection to the library</span></div>
+          <div><code>delete_item_permanently / move_item_to_different_library</code><span>Destructive — requires the
+              item's current <code>version</code></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h3>Features</h3>
+      <h4>Built to be trusted with write access</h4>
+      <div class="feat-grid">
+        <div class="feat"><b>Full CRUD, on purpose</b><span>Not just search — create, tag, update, delete, and move,
+            so tagging and cleanup can be automated too.</span></div>
+        <div class="feat"><b>Optimistic concurrency</b><span>Mutating calls on existing items require the current
+            Zotero <code>version</code>; a stale one is refused, never silently overwritten.</span></div>
+        <div class="feat"><b>First-party OAuth 2.1</b><span>A real authorization server built into the app, not Basic
+            Auth in front of it — so "Add custom connector" just works.</span></div>
+        <div class="feat"><b>Dynamic client registration</b><span>Any MCP client can self-register (RFC 7591);
+            completing the login form is what actually gates access.</span></div>
+        <div class="feat"><b>Remote by default</b><span>Ships as its own Docker container behind a reverse proxy —
+            nothing to install or run locally.</span></div>
+        <div class="feat"><b>Library is a setting</b><span><code>ZOTERO_LIBRARY_ID</code>/<code>TYPE</code>/<code>API_KEY</code>
+            configure which library it talks to — never hardcoded.</span></div>
+        <div class="feat"><b>Tested against a fake</b><span>All read/write logic runs against an in-memory
+            <code>FakeZotero</code> in tests — the suite never touches a live library.</span></div>
+      </div>
+    </section>
+
+    <section id="safety">
+      <h3>Key safety</h3>
+      <h4>Why delete and move need care</h4>
+      <p class="lead">Full CRUD was a deliberate scope choice, and it comes with a
+        real risk this project is built around rather than around ignoring.</p>
+      <div class="pgrid">
+        <div class="pcard"><b>Keys are load-bearing</b><span>Zotero's Word plugin cites items by key via live field
+            codes. Anything that changes an item's key breaks that citation silently.</span></div>
+        <div class="pcard"><b>Delete and move are the risk</b><span>Moving between libraries is delete+recreate under
+            the hood — both change the key, both are flagged destructive in the tool name and docstring.</span></div>
+        <div class="pcard"><b>Version-gated writes</b><span>Delete/move require the item's current
+            <code>version</code>. A mismatch means it changed since — the call is refused, not forced through.</span>
+        </div>
+        <div class="pcard"><b>Safe ops preserve keys</b><span>Create, field updates, tags, notes, and collection
+            membership never touch an item's key — safe to automate freely.</span></div>
+        <div class="pcard"><b>Deliberate, not accidental</b><span>The risk was accepted with eyes open, not
+            overlooked — see the README before extending delete/move further.</span></div>
+        <div class="pcard"><b>OAuth over Basic Auth</b><span>Chosen because Claude's connector UI always tries OAuth
+            discovery first; a bare 401 gets read as "needs OAuth" and fails at a nonexistent endpoint.</span></div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    <div class="links">
+      <a href="https://github.com/herbertkokholm/zotero-mcp" target="_blank" rel="noopener">GitHub</a>
+      <a href="#safety">Key safety</a>
+      <a href="#mcp">MCP setup</a>
+    </div>
+    zotero-mcp — MIT licensed.
+  </footer>
+
+  <script>
+    var themetog = document.getElementById('themetog');
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('zmcp-theme', t);
+      themetog.textContent = t === 'dark' ? 'Light' : 'Dark';
+    }
+    setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    themetog.onclick = function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); };
+  </script>
+</body>
+
+</html>
