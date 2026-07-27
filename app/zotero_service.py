@@ -26,7 +26,10 @@ silently, so a spurious clobber is worse than usual.
 
 from __future__ import annotations
 
+import base64
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pyzotero import zotero, zotero_errors
@@ -115,6 +118,23 @@ def format_creators(creators: list | None) -> str:
     return ", ".join(n for n in (_creator_name(c) for c in creators or []) if n)
 
 
+def _attachment_summary(item: dict) -> dict:
+    """Reduces a raw Zotero attachment item to the fields a caller needs
+    to identify it and act on it (download, fulltext lookup). Unlike
+    _item_summary, no creators/date/doi -- attachments don't carry them."""
+    data = item.get("data", {})
+    return {
+        "key": data.get("key") or item.get("key"),
+        "version": data.get("version", item.get("version")),
+        "title": data.get("title", ""),
+        "filename": data.get("filename", ""),
+        "content_type": data.get("contentType", ""),
+        "link_mode": data.get("linkMode", ""),
+        "parent_item": data.get("parentItem"),
+        "tags": [t["tag"] for t in data.get("tags", []) if t.get("tag")],
+    }
+
+
 def _item_summary(item: dict) -> dict:
     """Reduces a raw Zotero item (as returned by pyzotero) to the fields a
     caller needs to read, decide, and pass `version` back into a follow-up
@@ -194,6 +214,55 @@ class ZoteroService:
             }
             for c in raw
         ]
+
+    # ---- attachments & fulltext (read) ----------------------------------
+
+    def list_attachments(self, item_key: str) -> list[dict]:
+        """List the file attachments (PDFs, snapshots, etc.) filed under
+        an item -- not its notes. Read-only. Each result's `key` can be
+        passed to download_attachment or get_fulltext."""
+        try:
+            children = self.zot.children(item_key)
+        except Exception as exc:
+            raise _translate(exc, key=item_key) from exc
+        return [
+            _attachment_summary(c)
+            for c in children
+            if c.get("data", {}).get("itemType") == "attachment"
+        ]
+
+    def get_fulltext(self, attachment_key: str) -> dict:
+        """Fetch Zotero's extracted full-text content and indexing
+        progress for an attachment. Only meaningful for attachments Zotero
+        has indexed (PDFs/text files with extracted text); raises
+        ItemNotFoundError if there's no indexed full text for this key.
+        Read-only."""
+        try:
+            data = self.zot.fulltext_item(attachment_key)
+        except Exception as exc:
+            raise _translate(exc, key=attachment_key) from exc
+        return {
+            "key": attachment_key,
+            "content": data.get("content", ""),
+            "indexed_pages": data.get("indexedPages"),
+            "total_pages": data.get("totalPages"),
+            "indexed_chars": data.get("indexedChars"),
+            "total_chars": data.get("totalChars"),
+        }
+
+    def download_attachment(self, attachment_key: str) -> dict:
+        """Download an attachment's file content, base64-encoded. This
+        server runs remotely, so raw bytes can't be handed back as a
+        local file path -- the caller must base64-decode
+        `content_base64` itself. Read-only."""
+        try:
+            item = self.zot.item(attachment_key)
+            raw = self.zot.file(attachment_key)
+        except Exception as exc:
+            raise _translate(exc, key=attachment_key) from exc
+        summary = _attachment_summary(item)
+        summary["content_base64"] = base64.b64encode(raw).decode("ascii")
+        return summary
 
     # ---- create ------------------------------------------------------
 
@@ -326,6 +395,51 @@ class ZoteroService:
             "name": name,
             "parent_collection": parent_key or None,
         }
+
+    # ---- attachments (create) --------------------------------------------
+
+    def upload_attachment(
+        self,
+        parent_key: str,
+        filename: str,
+        content_base64: str,
+        title: str | None = None,
+    ) -> dict:
+        """Upload a new file attachment as a child of an existing item
+        (e.g. attach a PDF to a journalArticle item). Safe: creates a
+        brand-new attachment item with its own key; never touches the
+        parent item's own fields or version.
+
+        filename: name to store the file under, e.g. "paper.pdf" -- also
+            used to guess Zotero's contentType from the extension.
+        content_base64: the file's bytes, base64-encoded. This server
+            runs remotely and has no access to the caller's local
+            filesystem, so content must travel as a string rather than a
+            local path.
+        title: attachment title shown in Zotero; defaults to filename.
+        """
+        raw = base64.b64decode(content_base64)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / filename
+            path.write_bytes(raw)
+            try:
+                result = self.zot.attachment_both(
+                    [(title or filename, str(path))], parentid=parent_key
+                )
+            except Exception as exc:
+                raise _translate(exc, key=parent_key) from exc
+
+        failures = result.get("failure") or []
+        if failures:
+            raise ValidationError(f"Zotero rejected the attachment upload: {failures}")
+        created = (result.get("success") or result.get("unchanged") or [None])[0]
+        if created is None:
+            raise ZoteroApiError(f"Upload did not report success: {result}")
+        try:
+            item = self.zot.item(created["key"])
+        except Exception as exc:
+            raise _translate(exc, key=created.get("key")) from exc
+        return _attachment_summary(item)
 
     # ---- destructive: delete --------------------------------------------
 

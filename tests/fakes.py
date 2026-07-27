@@ -12,6 +12,8 @@ success/failed response shape.
 
 from __future__ import annotations
 
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 from pyzotero import zotero_errors
@@ -23,6 +25,8 @@ class FakeZotero:
         self.library_type = library_type
         self._items: dict[str, dict[str, Any]] = {}
         self._collections: dict[str, dict[str, Any]] = {}
+        self._files: dict[str, bytes] = {}
+        self._fulltext: dict[str, dict[str, Any]] = {}
         self._next_id = 1
 
     # ---- test setup helpers (not part of pyzotero's real interface) ----
@@ -63,6 +67,41 @@ class FakeZotero:
         }
         self._collections[key] = full
         return full
+
+    def seed_attachment(
+        self,
+        parent_key: str,
+        *,
+        title: str = "paper.pdf",
+        filename: str = "paper.pdf",
+        content: bytes = b"%PDF-fake",
+        content_type: str = "application/pdf",
+    ) -> dict:
+        key = self._new_key()
+        full = {
+            "key": key,
+            "version": 1,
+            "library": {"type": self.library_type, "id": self.library_id},
+            "links": {},
+            "meta": {},
+            "data": {
+                "key": key,
+                "version": 1,
+                "itemType": "attachment",
+                "linkMode": "imported_file",
+                "title": title,
+                "filename": filename,
+                "contentType": content_type,
+                "parentItem": parent_key,
+                "tags": [],
+            },
+        }
+        self._items[key] = full
+        self._files[key] = content
+        return full
+
+    def seed_fulltext(self, key: str, content: str, **extra: Any) -> None:
+        self._fulltext[key] = {"content": content, **extra}
 
     def _new_key(self) -> str:
         key = f"KEY{self._next_id}"
@@ -182,6 +221,60 @@ class FakeZotero:
                 f"got {expected_version}"
             )
         del self._items[key]
+
+    def children(self, item: str, **kwargs: Any) -> list[dict]:
+        if item not in self._items:
+            raise zotero_errors.ResourceNotFoundError(f"No item {item}")
+        return [i for i in self._items.values() if i["data"].get("parentItem") == item]
+
+    def fulltext_item(self, itemkey: str, **kwargs: Any) -> dict:
+        try:
+            return self._fulltext[itemkey]
+        except KeyError:
+            raise zotero_errors.ResourceNotFoundError(
+                f"No fulltext for {itemkey}"
+            ) from None
+
+    def file(self, item: str, **kwargs: Any) -> bytes:
+        try:
+            return self._files[item]
+        except KeyError:
+            raise zotero_errors.ResourceNotFoundError(f"No file for {item}") from None
+
+    def attachment_both(
+        self, files: list[tuple[str, str]], parentid: str | None = None
+    ) -> dict:
+        if parentid is not None and parentid not in self._items:
+            raise zotero_errors.ResourceNotFoundError(f"No item {parentid}")
+        success = []
+        for title, filepath in files:
+            key = self._new_key()
+            content = Path(filepath).read_bytes()
+            content_type = mimetypes.guess_type(filepath)[0] or "application/octet-stream"
+            data = {
+                "key": key,
+                "version": 1,
+                "itemType": "attachment",
+                "linkMode": "imported_file",
+                "title": title,
+                "filename": Path(filepath).name,
+                "contentType": content_type,
+                "tags": [],
+            }
+            if parentid:
+                data["parentItem"] = parentid
+            full = {
+                "key": key,
+                "version": 1,
+                "library": {"type": self.library_type, "id": self.library_id},
+                "links": {},
+                "meta": {},
+                "data": data,
+            }
+            self._items[key] = full
+            self._files[key] = content
+            success.append(dict(data))
+        return {"success": success, "failure": [], "unchanged": []}
 
     def collections(self, **kwargs: Any) -> list[dict]:
         return list(self._collections.values())

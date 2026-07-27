@@ -5,6 +5,8 @@ ZoteroService backed by the in-memory FakeZotero -- never a real Zotero
 client, per README's testing note.
 """
 
+import base64
+
 import pytest
 
 from app import mcp_server
@@ -86,6 +88,27 @@ def test_collection_tools(fake_service):
         item["key"], version=updated["version"], collection_key=coll["key"]
     )
     assert updated["collections"] == []
+
+
+def test_attachment_and_fulltext_tools(fake_service):
+    parent = fake_service.seed_item("journalArticle", {"title": "Host"})
+    content = base64.b64encode(b"pdf bytes").decode("ascii")
+
+    uploaded = mcp_server.upload_attachment(
+        parent["key"], "paper.pdf", content, title="Paper"
+    )
+    assert uploaded["title"] == "Paper"
+    assert uploaded["parent_item"] == parent["key"]
+
+    listed = mcp_server.list_attachments(parent["key"])
+    assert [a["key"] for a in listed] == [uploaded["key"]]
+
+    downloaded = mcp_server.download_attachment(uploaded["key"])
+    assert base64.b64decode(downloaded["content_base64"]) == b"pdf bytes"
+
+    fake_service.seed_fulltext(uploaded["key"], "extracted text")
+    fulltext = mcp_server.get_fulltext(uploaded["key"])
+    assert fulltext["content"] == "extracted text"
 
 
 def test_list_collections_tool(fake_service):

@@ -1,7 +1,8 @@
 # zotero-mcp
 
 A standalone, remote MCP server giving full read/write access to a Zotero
-library — search, add, tag, update, delete, and move items.
+library — search, add, tag, update, delete, and move items; upload/download
+attachments and read their extracted full text.
 
 ## Why this exists
 
@@ -88,17 +89,23 @@ access), so it can be revoked independently if it ever leaks.
 
 ## Tools
 
-Read-only: `search_items`, `get_item`, `list_collections`.
+Read-only: `search_items`, `get_item`, `list_collections`, `list_attachments`,
+`get_fulltext`, `download_attachment`.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
 `update_item`, `add_tags`/`remove_tags`/`set_tags`,
-`add_to_collection`/`remove_from_collection`.
+`add_to_collection`/`remove_from_collection`, `upload_attachment`.
 
 Destructive (see "Key safety" above): `delete_item_permanently`,
 `move_item_to_different_library`. Both require the item's current Zotero
 `version` (get it from `search_items`/`get_item` first) and refuse the call
 if it doesn't match the server's current version, rather than silently
 overwriting a concurrent change.
+
+Attachment file content (`upload_attachment`'s `content_base64` argument,
+`download_attachment`'s `content_base64` result) travels base64-encoded —
+this server is remote and has no access to the caller's local filesystem, so
+raw bytes can't be passed as a local path the way pyzotero itself expects.
 
 ## Testing
 

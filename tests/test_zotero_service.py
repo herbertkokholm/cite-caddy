@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 
 from app.zotero_service import (
@@ -39,6 +41,108 @@ def test_list_collections(service, fake_zot):
     fake_zot.seed_collection("Papers")
     result = service.list_collections()
     assert result[0]["name"] == "Papers"
+
+
+# ---- attachments & fulltext (read) -----------------------------------------
+
+
+def test_list_attachments_excludes_notes(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle")
+    attachment = fake_zot.seed_attachment(item["key"], title="paper.pdf")
+    # A note child, if seeded directly into fake_zot, must be filtered out.
+    fake_zot._items["NOTE1"] = {
+        "key": "NOTE1",
+        "version": 1,
+        "data": {
+            "key": "NOTE1",
+            "version": 1,
+            "itemType": "note",
+            "parentItem": item["key"],
+            "tags": [],
+        },
+    }
+
+    results = service.list_attachments(item["key"])
+
+    assert [r["key"] for r in results] == [attachment["key"]]
+    assert results[0]["filename"] == "paper.pdf"
+    assert results[0]["content_type"] == "application/pdf"
+
+
+def test_list_attachments_item_not_found(service):
+    with pytest.raises(ItemNotFoundError):
+        service.list_attachments("MISSING")
+
+
+def test_get_fulltext(service, fake_zot):
+    attachment = fake_zot.seed_attachment("PARENT1")
+    fake_zot.seed_fulltext(
+        attachment["key"], "extracted text", indexedPages=3, totalPages=3
+    )
+
+    result = service.get_fulltext(attachment["key"])
+
+    assert result["content"] == "extracted text"
+    assert result["indexed_pages"] == 3
+    assert result["total_pages"] == 3
+
+
+def test_get_fulltext_not_found(service):
+    with pytest.raises(ItemNotFoundError):
+        service.get_fulltext("MISSING")
+
+
+def test_download_attachment(service, fake_zot):
+    attachment = fake_zot.seed_attachment(
+        "PARENT1", filename="paper.pdf", content=b"%PDF-1.4 fake bytes"
+    )
+
+    result = service.download_attachment(attachment["key"])
+
+    assert result["filename"] == "paper.pdf"
+    assert result["content_type"] == "application/pdf"
+    assert base64.b64decode(result["content_base64"]) == b"%PDF-1.4 fake bytes"
+
+
+def test_download_attachment_not_found(service):
+    with pytest.raises(ItemNotFoundError):
+        service.download_attachment("MISSING")
+
+
+# ---- attachments (create) ---------------------------------------------------
+
+
+def test_upload_attachment(service, fake_zot):
+    parent = fake_zot.seed_item("journalArticle", {"title": "Host Item"})
+    content = base64.b64encode(b"hello pdf bytes").decode("ascii")
+
+    result = service.upload_attachment(
+        parent["key"], "notes.pdf", content, title="My Notes"
+    )
+
+    assert result["title"] == "My Notes"
+    assert result["filename"] == "notes.pdf"
+    assert result["parent_item"] == parent["key"]
+    assert result["content_type"] == "application/pdf"
+
+    # Round-trips through download_attachment against the same fake store.
+    downloaded = service.download_attachment(result["key"])
+    assert base64.b64decode(downloaded["content_base64"]) == b"hello pdf bytes"
+
+
+def test_upload_attachment_defaults_title_to_filename(service, fake_zot):
+    parent = fake_zot.seed_item("journalArticle")
+    content = base64.b64encode(b"data").decode("ascii")
+
+    result = service.upload_attachment(parent["key"], "untitled.txt", content)
+
+    assert result["title"] == "untitled.txt"
+
+
+def test_upload_attachment_parent_not_found(service):
+    content = base64.b64encode(b"data").decode("ascii")
+    with pytest.raises(ItemNotFoundError):
+        service.upload_attachment("MISSING", "f.pdf", content)
 
 
 # ---- create ----------------------------------------------------------------

@@ -1,6 +1,7 @@
 """Remote MCP server exposing full read/write access to a Zotero library
-(search, add, tag, update, delete, move) -- see README for the key safety
-note on delete/move breaking Word-plugin citations.
+(search, add, tag, update, delete, move, attachments, full text) -- see
+README for the key safety note on delete/move breaking Word-plugin
+citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
 over streamable-http, bound to 0.0.0.0:$PORT"; without $PORT, this runs
@@ -75,13 +76,18 @@ load_dotenv()
 _PORT = os.environ.get("PORT")
 _INSTRUCTIONS = (
     "Full read/write access to a Zotero library: search, add, tag, update, "
-    "delete, and move items and collections. Mutating tools that touch an "
-    "existing item require its current `version` (from search_items/"
-    "get_item) and refuse the write if it's stale -- re-fetch and retry in "
-    "that case, don't just resend the same version. delete_item_permanently "
-    "and move_item_to_different_library break any Word-document citation "
-    "referencing the item's key; prefer add_to_collection/"
-    "remove_from_collection for in-library reorganization, which is safe."
+    "delete, and move items and collections; list/download/upload item "
+    "attachments and read their extracted full text. Mutating tools that "
+    "touch an existing item require its current `version` (from "
+    "search_items/get_item) and refuse the write if it's stale -- re-fetch "
+    "and retry in that case, don't just resend the same version. "
+    "delete_item_permanently and move_item_to_different_library break any "
+    "Word-document citation referencing the item's key; prefer "
+    "add_to_collection/remove_from_collection for in-library "
+    "reorganization, which is safe. Attachment file content travels as "
+    "base64 (upload_attachment's content_base64, download_attachment's "
+    "content_base64 in the result) since this server runs remotely with "
+    "no access to the caller's local filesystem."
 )
 
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
@@ -259,6 +265,54 @@ def list_collections() -> list[dict]:
     return get_service().list_collections()
 
 
+# ---- attachments & fulltext (read) ---------------------------------------
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Item Attachments",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_attachments(item_key: str) -> list[dict]:
+    """List the file attachments (PDFs, snapshots, etc.) filed under an
+    item -- not its notes. Read-only. Each result's `key` can be passed to
+    download_attachment or get_fulltext."""
+    return get_service().list_attachments(item_key)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Get Attachment Full Text",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def get_fulltext(attachment_key: str) -> dict:
+    """Fetch Zotero's extracted full-text content and indexing progress
+    for an attachment (see list_attachments for keys). Only meaningful
+    for attachments Zotero has indexed -- PDFs/text files with extracted
+    text -- not e.g. images; raises an error if there's no indexed full
+    text for this key. Read-only."""
+    return get_service().get_fulltext(attachment_key)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Download Attachment",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def download_attachment(attachment_key: str) -> dict:
+    """Download an attachment's file content (see list_attachments for
+    keys). Read-only. Returns `content_base64` -- this server runs
+    remotely, so raw bytes travel as a base64 string rather than a local
+    file path; decode it to reconstruct the file."""
+    return get_service().download_attachment(attachment_key)
+
+
 # ---- create (safe) -------------------------------------------------------
 
 
@@ -310,6 +364,35 @@ def create_item(
 def create_collection(name: str, parent_key: str | None = None) -> dict:
     """Create a new collection, optionally nested under parent_key. Safe."""
     return get_service().create_collection(name, parent_key=parent_key)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Upload Attachment",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
+def upload_attachment(
+    parent_key: str, filename: str, content_base64: str, title: str | None = None
+) -> dict:
+    """Upload a new file attachment as a child of an existing item (e.g.
+    attach a PDF to a journalArticle item). Safe: creates a brand-new
+    attachment item with its own key; never touches the parent item's own
+    fields or version.
+
+    filename: name to store the file under, e.g. "paper.pdf" -- also used
+        to guess Zotero's contentType from the extension.
+    content_base64: the file's bytes, base64-encoded. This server runs
+        remotely and has no access to the caller's local filesystem, so
+        content must travel as a string rather than a local path.
+    title: attachment title shown in Zotero; defaults to filename.
+    """
+    return get_service().upload_attachment(
+        parent_key, filename, content_base64, title=title
+    )
 
 
 # ---- update (safe, key-preserving) --------------------------------------
