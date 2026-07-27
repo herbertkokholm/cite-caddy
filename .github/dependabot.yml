@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Python dependencies (pyzotero, mcp, pytest, ...) via pyproject.toml/uv.lock.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Actions referenced in .github/workflows/*.yml (checkout, setup-python).
+  # Pinned by commit SHA, so these PRs bump the pin, not just a version tag.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Dockerfile's base image (python:3.12-slim).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
