@@ -94,9 +94,7 @@ def _translate(
     noun: str = "item",
 ) -> ZoteroServiceError:
     if isinstance(exc, zotero_errors.ResourceNotFoundError):
-        return not_found_cls(
-            f"No {noun} found for key {key!r}" if key else str(exc)
-        )
+        return not_found_cls(f"No {noun} found for key {key!r}" if key else str(exc))
     if isinstance(
         exc,
         (
@@ -350,8 +348,7 @@ class ZoteroService:
         except Exception as exc:
             raise _translate(exc) from exc
         return [
-            {"creator_type": c["creatorType"], "localized": c["localized"]}
-            for c in raw
+            {"creator_type": c["creatorType"], "localized": c["localized"]} for c in raw
         ]
 
     # ---- attachments & fulltext (read) ----------------------------------
@@ -693,8 +690,7 @@ class ZoteroService:
         """
         if name is None and parent_key is None:
             raise ValidationError(
-                "update_collection requires name and/or parent_key -- "
-                "nothing to change"
+                "update_collection requires name and/or parent_key -- nothing to change"
             )
         try:
             current = self.zot.collection(key)["data"]

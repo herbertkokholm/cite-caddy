@@ -342,7 +342,9 @@ class FakeZotero:
         for title, filepath in files:
             key = self._new_key()
             content = Path(filepath).read_bytes()
-            content_type = mimetypes.guess_type(filepath)[0] or "application/octet-stream"
+            content_type = (
+                mimetypes.guess_type(filepath)[0] or "application/octet-stream"
+            )
             data = {
                 "key": key,
                 "version": 1,

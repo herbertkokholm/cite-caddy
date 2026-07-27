@@ -97,7 +97,7 @@ _INSTRUCTIONS = (
     "item's tags. trash_item is a reversible soft delete (undo with "
     "restore_from_trash); delete_item_permanently is not reversible -- "
     "prefer trash_item when a delete might need to be undone. "
-    "list_groups' results (`id`, with target_library_type=\"group\") are "
+    'list_groups\' results (`id`, with target_library_type="group") are '
     "for target_library_id on move_item_to_different_library. "
     "list_item_types/list_item_type_fields/list_item_creator_types "
     "describe what create_item/update_item will actually accept for a "

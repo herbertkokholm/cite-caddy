@@ -519,7 +519,9 @@ def test_update_collection_reparents_without_touching_name(service, fake_zot):
     parent = fake_zot.seed_collection("Parent")
     coll = fake_zot.seed_collection("Child", parent_key=None)
 
-    updated = service.update_collection(coll["key"], version=1, parent_key=parent["key"])
+    updated = service.update_collection(
+        coll["key"], version=1, parent_key=parent["key"]
+    )
 
     assert updated["name"] == "Child"  # unchanged
     assert updated["parent_collection"] == parent["key"]
