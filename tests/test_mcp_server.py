@@ -74,6 +74,21 @@ def test_tag_tools(fake_service):
     assert updated["tags"] == ["only"]
 
 
+def test_library_tag_tools(fake_service):
+    a = fake_service.seed_item("book", {"tags": [{"tag": "old"}]})
+    b = fake_service.seed_item("book", {"tags": [{"tag": "other"}]})
+
+    assert sorted(mcp_server.list_tags()) == ["old", "other"]
+
+    renamed = mcp_server.rename_tag("old", "new")
+    assert renamed["items_updated"] == 1
+    assert mcp_server.get_item(a["key"])["tags"] == ["new"]
+
+    result = mcp_server.delete_tag("other")
+    assert result["deleted"] is True
+    assert mcp_server.get_item(b["key"])["tags"] == []
+
+
 def test_collection_tools(fake_service):
     coll = mcp_server.create_collection("Papers")
     assert coll["name"] == "Papers"

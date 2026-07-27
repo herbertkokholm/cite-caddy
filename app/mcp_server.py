@@ -1,7 +1,7 @@
 """Remote MCP server exposing full read/write access to a Zotero library
 (search, add, tag, update, delete, move, attachments, full text, notes,
-collection rename/delete) -- see README for the key safety note on
-delete/move breaking Word-plugin citations.
+collection rename/delete, library-wide tag rename/delete) -- see README
+for the key safety note on delete/move breaking Word-plugin citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
 over streamable-http, bound to 0.0.0.0:$PORT"; without $PORT, this runs
@@ -77,20 +77,23 @@ _PORT = os.environ.get("PORT")
 _INSTRUCTIONS = (
     "Full read/write access to a Zotero library: search, add, tag, update, "
     "delete, and move items; create, rename/move, and delete collections; "
-    "list/download/upload item attachments and read their extracted full "
-    "text; list/add/edit item notes. Mutating tools that touch an "
-    "existing item or collection require its current `version` (from "
+    "list/rename/delete tags library-wide; list/download/upload item "
+    "attachments and read their extracted full text; list/add/edit item "
+    "notes. Mutating tools that touch an existing item or collection "
+    "require its current `version` (from "
     "search_items/get_item/list_collections) and refuse the write if it's "
     "stale -- re-fetch and retry in that case, don't just resend the same "
     "version. delete_item_permanently and move_item_to_different_library "
     "break any Word-document citation referencing the item's key; prefer "
     "add_to_collection/remove_from_collection for in-library "
     "reorganization, which is safe. delete_collection cascades to any "
-    "sub-collections but never deletes the items filed in them. Attachment "
-    "file content travels as base64 (upload_attachment's content_base64, "
-    "download_attachment's content_base64 in the result) since this "
-    "server runs remotely with no access to the caller's local "
-    "filesystem."
+    "sub-collections but never deletes the items filed in them. "
+    "rename_tag/delete_tag act on every item in the library carrying that "
+    "tag, not just one -- use add_tags/remove_tags/set_tags for a single "
+    "item's tags. Attachment file content travels as base64 "
+    "(upload_attachment's content_base64, download_attachment's "
+    "content_base64 in the result) since this server runs remotely with "
+    "no access to the caller's local filesystem."
 )
 
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
@@ -266,6 +269,23 @@ def list_collections() -> list[dict]:
     """List all collections in the library (key, name, parent_collection).
     Read-only."""
     return get_service().list_collections()
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Tags",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_tags(query: str | None = None, limit: int = 100, start: int = 0) -> list[str]:
+    """List distinct tags used anywhere in the library -- not one item's
+    tags (see search_items/get_item for those). Read-only.
+
+    query: substring filter on tag name, or omit to list all tags.
+    limit/start: pagination (default limit 100).
+    """
+    return get_service().list_tags(query=query, limit=limit, start=start)
 
 
 # ---- attachments & fulltext (read) ---------------------------------------
@@ -556,6 +576,29 @@ def set_tags(key: str, version: int, tags: list[str]) -> dict:
 
 @mcp.tool(
     annotations=ToolAnnotations(
+        title="Rename Zotero Tag",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def rename_tag(old_tag: str, new_tag: str) -> dict:
+    """Rename a tag across every item in the library that carries it (not
+    just one item -- see add_tags/remove_tags/set_tags for single-item
+    edits). Zotero has no native tag-rename: this adds new_tag and removes
+    old_tag on each affected item individually, merging with each item's
+    existing tags.
+
+    Not atomic across items -- if it fails partway through (e.g. a
+    concurrent edit on one item), re-run with the same arguments;
+    already-renamed items are skipped since they no longer carry old_tag.
+    """
+    return get_service().rename_tag(old_tag, new_tag)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
         title="Add Item to Zotero Collection",
         readOnlyHint=False,
         destructiveHint=False,
@@ -616,6 +659,27 @@ def delete_item_permanently(key: str, version: int) -> dict:
     with the item.
     """
     return get_service().delete_item(key, version)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Delete Zotero Tag",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def delete_tag(tag: str) -> dict:
+    """DESTRUCTIVE -- permanently removes this tag from every item in the
+    library that carries it (not one item -- see remove_tags for that).
+    Cannot be undone through this server.
+
+    Unlike delete_item_permanently/delete_collection, this has no
+    caller-supplied version to check -- Zotero's tag-delete endpoint is
+    gated on the library's own version internally.
+    """
+    return get_service().delete_tag(tag)
 
 
 @mcp.tool(

@@ -203,6 +203,34 @@ class FakeZotero:
             return results[start : start + limit]
         return results[start:]
 
+    def tags(self, **kwargs: Any) -> list[str]:
+        all_tags = sorted(
+            {
+                t.get("tag")
+                for i in self._items.values()
+                for t in i["data"].get("tags", [])
+                if t.get("tag")
+            }
+        )
+        q = kwargs.get("q")
+        if q:
+            all_tags = [t for t in all_tags if q.lower() in t.lower()]
+        start = kwargs.get("start", 0)
+        limit = kwargs.get("limit")
+        if limit is not None:
+            return all_tags[start : start + limit]
+        return all_tags[start:]
+
+    def delete_tags(self, *tags: str) -> None:
+        tag_set = set(tags)
+        for item in self._items.values():
+            item["data"]["tags"] = [
+                t for t in item["data"].get("tags", []) if t.get("tag") not in tag_set
+            ]
+
+    def everything(self, query: Any) -> Any:
+        return query
+
     def collection_items(self, collection: str, **kwargs: Any) -> list[dict]:
         results = [
             i

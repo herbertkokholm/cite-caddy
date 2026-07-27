@@ -292,6 +292,66 @@ def test_set_tags_replaces(service, fake_zot):
     assert updated["tags"] == ["only-this"]
 
 
+# ---- tags (library-wide) ------------------------------------------------
+
+
+def test_list_tags(service, fake_zot):
+    fake_zot.seed_item("book", {"tags": [{"tag": "alpha"}]})
+    fake_zot.seed_item("book", {"tags": [{"tag": "beta"}]})
+
+    assert service.list_tags() == ["alpha", "beta"]
+
+
+def test_list_tags_filters_by_query(service, fake_zot):
+    fake_zot.seed_item("book", {"tags": [{"tag": "alpha"}]})
+    fake_zot.seed_item("book", {"tags": [{"tag": "beta"}]})
+
+    assert service.list_tags(query="al") == ["alpha"]
+
+
+def test_rename_tag_across_items(service, fake_zot):
+    a = fake_zot.seed_item("book", {"tags": [{"tag": "old"}, {"tag": "keep"}]})
+    b = fake_zot.seed_item("book", {"tags": [{"tag": "old"}]})
+    untouched = fake_zot.seed_item("book", {"tags": [{"tag": "other"}]})
+
+    result = service.rename_tag("old", "new")
+
+    assert result["items_updated"] == 2
+    assert sorted(result["item_keys"]) == sorted([a["key"], b["key"]])
+    assert sorted(service.get_item(a["key"])["tags"]) == ["keep", "new"]
+    assert service.get_item(b["key"])["tags"] == ["new"]
+    assert service.get_item(untouched["key"])["tags"] == ["other"]
+
+
+def test_rename_tag_merges_if_target_already_present(service, fake_zot):
+    item = fake_zot.seed_item("book", {"tags": [{"tag": "old"}, {"tag": "new"}]})
+
+    result = service.rename_tag("old", "new")
+
+    assert result["items_updated"] == 1
+    assert service.get_item(item["key"])["tags"] == ["new"]
+
+
+def test_rename_tag_no_matching_items(service, fake_zot):
+    fake_zot.seed_item("book", {"tags": [{"tag": "unrelated"}]})
+
+    result = service.rename_tag("old", "new")
+
+    assert result["items_updated"] == 0
+    assert result["item_keys"] == []
+
+
+def test_delete_tag(service, fake_zot):
+    a = fake_zot.seed_item("book", {"tags": [{"tag": "doomed"}, {"tag": "keep"}]})
+    b = fake_zot.seed_item("book", {"tags": [{"tag": "unrelated"}]})
+
+    result = service.delete_tag("doomed")
+
+    assert result == {"tag": "doomed", "deleted": True}
+    assert service.get_item(a["key"])["tags"] == ["keep"]
+    assert service.get_item(b["key"])["tags"] == ["unrelated"]
+
+
 # ---- collection membership (safe "move") --------------------------------
 
 

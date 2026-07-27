@@ -90,22 +90,25 @@ access), so it can be revoked independently if it ever leaks.
 
 ## Tools
 
-Read-only: `search_items`, `get_item`, `list_collections`, `list_attachments`,
-`get_fulltext`, `download_attachment`, `list_notes`.
+Read-only: `search_items`, `get_item`, `list_collections`, `list_tags`,
+`list_attachments`, `get_fulltext`, `download_attachment`, `list_notes`.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
 `update_collection`, `update_item`, `add_tags`/`remove_tags`/`set_tags`,
-`add_to_collection`/`remove_from_collection`, `upload_attachment`,
-`create_note`, `update_note`.
+`rename_tag`, `add_to_collection`/`remove_from_collection`,
+`upload_attachment`, `create_note`, `update_note`.
 
 Destructive (see "Key safety" above): `delete_item_permanently`,
-`move_item_to_different_library`, `delete_collection`. All three require
-the item's/collection's current Zotero `version` (get it from
-`search_items`/`get_item`/`list_collections` first) and refuse the call if
-it doesn't match the server's current version, rather than silently
-overwriting a concurrent change. `delete_collection` cascades to any
-sub-collections (matching Zotero's own "Delete Collection" behavior) but
-never deletes the items filed in them.
+`move_item_to_different_library`, `delete_collection`, `delete_tag`. The
+first three require the item's/collection's current Zotero `version` (get
+it from `search_items`/`get_item`/`list_collections` first) and refuse the
+call if it doesn't match the server's current version, rather than
+silently overwriting a concurrent change. `delete_collection` cascades to
+any sub-collections (matching Zotero's own "Delete Collection" behavior)
+but never deletes the items filed in them. `rename_tag`/`delete_tag` act
+on every item in the library carrying that tag, not just one -- there's no
+per-tag version to check, since tags aren't standalone versioned entities
+in Zotero's API.
 
 Attachment file content (`upload_attachment`'s `content_base64` argument,
 `download_attachment`'s `content_base64` result) travels base64-encoded —

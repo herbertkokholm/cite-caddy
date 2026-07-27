@@ -405,6 +405,88 @@ class ZoteroService:
         except Exception as exc:
             raise _translate(exc, key=key) from exc
 
+    # ---- tags (library-wide) --------------------------------------------
+
+    def list_tags(
+        self, query: str | None = None, limit: int = 100, start: int = 0
+    ) -> list[str]:
+        """List distinct tags used anywhere in the library -- not one
+        item's tags (see search_items/get_item for those). Read-only.
+
+        query: substring filter on tag name, or omit to list all tags.
+        """
+        kwargs: dict[str, Any] = {"limit": limit, "start": start}
+        if query:
+            kwargs["q"] = query
+        try:
+            return list(self.zot.tags(**kwargs))
+        except Exception as exc:
+            raise _translate(exc) from exc
+
+    def rename_tag(self, old_tag: str, new_tag: str) -> dict:
+        """Renames a tag across every item in the library that carries it.
+
+        Zotero's API has no dedicated tag-rename endpoint -- this walks
+        every item carrying old_tag and, on each, adds new_tag (merging
+        with its existing tags) and removes old_tag, one item PATCH per
+        item. Not atomic across items: if it fails partway through (e.g.
+        a version conflict on one item, from a concurrent edit elsewhere),
+        the items already processed will show new_tag while the rest still
+        show old_tag. Safe to re-run with the same arguments in that case
+        -- already-renamed items no longer carry old_tag, so they're
+        simply skipped the second time.
+        """
+        try:
+            items = self.zot.everything(self.zot.items(tag=old_tag))
+        except Exception as exc:
+            raise _translate(exc) from exc
+
+        updated_keys: list[str] = []
+        for item in items:
+            data = item.get("data", {})
+            key = data.get("key")
+            version = data.get("version")
+            tags = {t["tag"] for t in data.get("tags", []) if t.get("tag")}
+            if old_tag not in tags:
+                continue
+            tags.discard(old_tag)
+            tags.add(new_tag)
+            try:
+                self._apply_patch(
+                    key, version, {"tags": [{"tag": t} for t in sorted(tags)]}
+                )
+            except Exception as exc:
+                raise ZoteroApiError(
+                    f"Renamed {old_tag!r} to {new_tag!r} on {len(updated_keys)} "
+                    f"item(s) before failing on item {key!r}: {exc}. Re-run "
+                    "rename_tag with the same arguments to retry the "
+                    "remaining items -- already-renamed ones will be skipped."
+                ) from exc
+            updated_keys.append(key)
+
+        return {
+            "old_tag": old_tag,
+            "new_tag": new_tag,
+            "items_updated": len(updated_keys),
+            "item_keys": updated_keys,
+        }
+
+    def delete_tag(self, tag: str) -> dict:
+        """DESTRUCTIVE. Permanently removes this tag from every item in
+        the library that carries it (not one item -- see remove_tags for
+        that). Cannot be undone through this server.
+
+        Uses Zotero's library-wide tag-delete endpoint, which pyzotero
+        gates on the library's own current version (fetched internally)
+        rather than a version the caller passes in -- unlike item/
+        collection deletes, there's no per-tag version to check.
+        """
+        try:
+            self.zot.delete_tags(tag)
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return {"tag": tag, "deleted": True}
+
     # ---- collection membership (key-preserving "move") -----------------
 
     def add_to_collection(self, key: str, version: int, collection_key: str) -> dict:
