@@ -44,6 +44,55 @@ def test_list_collections(service, fake_zot):
     assert result[0]["name"] == "Papers"
 
 
+# ---- trash ---------------------------------------------------------------
+
+
+def test_list_trash_excludes_active_items(service, fake_zot):
+    active = fake_zot.seed_item("book", {"title": "Active"})
+    trashed = fake_zot.seed_item("book", {"title": "Trashed", "deleted": 1})
+
+    result = service.list_trash()
+
+    assert [r["key"] for r in result] == [trashed["key"]]
+    assert result[0]["in_trash"] is True
+    assert active["key"] not in [r["key"] for r in result]
+
+
+def test_trash_item_removes_from_normal_listing(service, fake_zot):
+    item = fake_zot.seed_item("book", {"title": "Doomed"})
+
+    service.trash_item(item["key"], version=1)
+
+    assert service.search_items() == []
+    assert [r["key"] for r in service.list_trash()] == [item["key"]]
+
+
+def test_restore_from_trash(service, fake_zot):
+    item = fake_zot.seed_item("book", {"title": "Recoverable", "deleted": 1})
+
+    restored = service.restore_from_trash(item["key"], version=1)
+
+    assert restored["in_trash"] is False
+    assert [r["key"] for r in service.search_items()] == [item["key"]]
+    assert service.list_trash() == []
+
+
+def test_trash_item_then_restore_round_trip(service, fake_zot):
+    item = fake_zot.seed_item("book", {"title": "Round trip"})
+
+    trashed = service.trash_item(item["key"], version=1)
+    restored = service.restore_from_trash(item["key"], version=trashed["version"])
+
+    assert restored["key"] == item["key"]
+    assert restored["in_trash"] is False
+
+
+def test_update_item_tool_rejects_deleted_field(service, fake_zot):
+    item = fake_zot.seed_item("book")
+    with pytest.raises(ValidationError):
+        service.update_item(item["key"], version=1, fields={"deleted": 1})
+
+
 # ---- attachments & fulltext (read) -----------------------------------------
 
 

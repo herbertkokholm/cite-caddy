@@ -74,6 +74,21 @@ def test_tag_tools(fake_service):
     assert updated["tags"] == ["only"]
 
 
+def test_trash_tools(fake_service):
+    item = fake_service.seed_item("book", {"title": "Doomed"})
+
+    trashed = mcp_server.trash_item(item["key"], version=1)
+    assert trashed["in_trash"] is True
+    assert mcp_server.search_items() == []
+
+    listed = mcp_server.list_trash()
+    assert [i["key"] for i in listed] == [item["key"]]
+
+    restored = mcp_server.restore_from_trash(item["key"], version=trashed["version"])
+    assert restored["in_trash"] is False
+    assert mcp_server.list_trash() == []
+
+
 def test_library_tag_tools(fake_service):
     a = fake_service.seed_item("book", {"tags": [{"tag": "old"}]})
     b = fake_service.seed_item("book", {"tags": [{"tag": "other"}]})

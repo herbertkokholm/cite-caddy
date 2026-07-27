@@ -37,12 +37,20 @@ from pyzotero import zotero, zotero_errors
 from app.config import Settings
 
 # Fields every mutating call must reach through a dedicated tool for
-# (tags, collections, itemType, key/version bookkeeping), never through the
-# free-form `fields` dict on update_item -- see update_item's docstring.
-# `creators` is deliberately NOT reserved: unlike tags/collections there's
-# no incremental add/remove tool for it, so a full-array replace through
-# `fields` is the only way to edit an existing item's author list.
-_RESERVED_UPDATE_FIELDS = {"key", "version", "itemType", "tags", "collections"}
+# (tags, collections, itemType, key/version bookkeeping, trash status),
+# never through the free-form `fields` dict on update_item -- see
+# update_item's docstring. `creators` is deliberately NOT reserved: unlike
+# tags/collections there's no incremental add/remove tool for it, so a
+# full-array replace through `fields` is the only way to edit an existing
+# item's author list.
+_RESERVED_UPDATE_FIELDS = {
+    "key",
+    "version",
+    "itemType",
+    "tags",
+    "collections",
+    "deleted",
+}
 
 
 class ZoteroServiceError(RuntimeError):
@@ -182,6 +190,7 @@ def _item_summary(item: dict) -> dict:
         "url": data.get("url") or None,
         "tags": [t["tag"] for t in data.get("tags", []) if t.get("tag")],
         "collections": data.get("collections", []),
+        "in_trash": bool(data.get("deleted")),
     }
 
 
@@ -230,6 +239,17 @@ class ZoteroService:
         except Exception as exc:
             raise _translate(exc, key=key) from exc
         return _item_summary(item)
+
+    def list_trash(self, limit: int = 25, start: int = 0) -> list[dict]:
+        """List items currently in the trash -- soft-deleted (e.g. via the
+        Zotero desktop app's "Move to Trash", or trash_item below), but
+        not yet permanently gone. Read-only. Each result's `key`/`version`
+        can be passed to restore_from_trash."""
+        try:
+            raw_items = self.zot.trash(limit=limit, start=start)
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [_item_summary(item) for item in raw_items]
 
     def list_collections(self) -> list[dict]:
         try:
@@ -580,6 +600,23 @@ class ZoteroService:
                 exc, key=key, not_found_cls=CollectionNotFoundError, noun="collection"
             ) from exc
         return _collection_summary(updated)
+
+    # ---- trash (key-preserving, reversible) ------------------------------
+
+    def trash_item(self, key: str, version: int) -> dict:
+        """Move an item to the trash (soft delete) -- unlike delete_item,
+        this is reversible via restore_from_trash. Safe, key-preserving:
+        the item's key is unchanged, so a Word citation referencing it
+        keeps resolving unless/until it's later permanently deleted (e.g.
+        via delete_item, or "Empty Trash" in the Zotero desktop app).
+        """
+        return self._patch(key, version, {"deleted": 1})
+
+    def restore_from_trash(self, key: str, version: int) -> dict:
+        """Remove an item from the trash, restoring it to the library.
+        Safe, key-preserving. version: the item's current version (from
+        list_trash)."""
+        return self._patch(key, version, {"deleted": 0})
 
     # ---- attachments (create) --------------------------------------------
 

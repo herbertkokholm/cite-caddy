@@ -179,7 +179,9 @@ class FakeZotero:
             raise zotero_errors.ResourceNotFoundError(f"No item {key}") from None
 
     def items(self, **kwargs: Any) -> list[dict]:
-        results = list(self._items.values())
+        # Real Zotero API excludes trashed items from the normal /items
+        # listing by default -- they only show up via /items/trash.
+        results = [i for i in self._items.values() if not i["data"].get("deleted")]
         q = kwargs.get("q")
         if q:
             results = [
@@ -197,6 +199,14 @@ class FakeZotero:
                 for i in results
                 if tag in [t.get("tag") for t in i["data"].get("tags", [])]
             ]
+        start = kwargs.get("start", 0)
+        limit = kwargs.get("limit")
+        if limit is not None:
+            return results[start : start + limit]
+        return results[start:]
+
+    def trash(self, **kwargs: Any) -> list[dict]:
+        results = [i for i in self._items.values() if i["data"].get("deleted")]
         start = kwargs.get("start", 0)
         limit = kwargs.get("limit")
         if limit is not None:
@@ -236,6 +246,7 @@ class FakeZotero:
             i
             for i in self._items.values()
             if collection in i["data"].get("collections", [])
+            and not i["data"].get("deleted")
         ]
         limit = kwargs.get("limit")
         start = kwargs.get("start", 0)

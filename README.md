@@ -91,12 +91,17 @@ access), so it can be revoked independently if it ever leaks.
 ## Tools
 
 Read-only: `search_items`, `get_item`, `list_collections`, `list_tags`,
-`list_attachments`, `get_fulltext`, `download_attachment`, `list_notes`.
+`list_trash`, `list_attachments`, `get_fulltext`, `download_attachment`,
+`list_notes`.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
 `update_collection`, `update_item`, `add_tags`/`remove_tags`/`set_tags`,
-`rename_tag`, `add_to_collection`/`remove_from_collection`,
-`upload_attachment`, `create_note`, `update_note`.
+`rename_tag`, `add_to_collection`/`remove_from_collection`, `trash_item`,
+`restore_from_trash`, `upload_attachment`, `create_note`, `update_note`.
+`trash_item` is a reversible soft delete (undo with `restore_from_trash`)
+-- unlike `delete_item_permanently` below, it doesn't break Word
+citations unless the item is later permanently deleted or the trash is
+emptied.
 
 Destructive (see "Key safety" above): `delete_item_permanently`,
 `move_item_to_different_library`, `delete_collection`, `delete_tag`. The

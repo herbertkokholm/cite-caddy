@@ -1,7 +1,8 @@
 """Remote MCP server exposing full read/write access to a Zotero library
 (search, add, tag, update, delete, move, attachments, full text, notes,
-collection rename/delete, library-wide tag rename/delete) -- see README
-for the key safety note on delete/move breaking Word-plugin citations.
+collection rename/delete, library-wide tag rename/delete, trash view/
+move/restore) -- see README for the key safety note on delete/move
+breaking Word-plugin citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
 over streamable-http, bound to 0.0.0.0:$PORT"; without $PORT, this runs
@@ -90,10 +91,13 @@ _INSTRUCTIONS = (
     "sub-collections but never deletes the items filed in them. "
     "rename_tag/delete_tag act on every item in the library carrying that "
     "tag, not just one -- use add_tags/remove_tags/set_tags for a single "
-    "item's tags. Attachment file content travels as base64 "
-    "(upload_attachment's content_base64, download_attachment's "
-    "content_base64 in the result) since this server runs remotely with "
-    "no access to the caller's local filesystem."
+    "item's tags. trash_item is a reversible soft delete (undo with "
+    "restore_from_trash); delete_item_permanently is not reversible -- "
+    "prefer trash_item when a delete might need to be undone. Attachment "
+    "file content travels as base64 (upload_attachment's content_base64, "
+    "download_attachment's content_base64 in the result) since this "
+    "server runs remotely with no access to the caller's local "
+    "filesystem."
 )
 
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
@@ -256,6 +260,22 @@ def get_item(key: str) -> dict:
     `version` right before a mutating call, if you don't already have a
     fresh one from search_items."""
     return get_service().get_item(key)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Trash",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_trash(limit: int = 25, start: int = 0) -> list[dict]:
+    """List items currently in the trash -- soft-deleted (e.g. via the
+    Zotero desktop app's "Move to Trash", or trash_item), but not yet
+    permanently gone. Read-only. Each result's `key`/`version` can be
+    passed to restore_from_trash. limit/start: pagination (default limit
+    25)."""
+    return get_service().list_trash(limit=limit, start=start)
 
 
 @mcp.tool(
@@ -430,6 +450,46 @@ def update_collection(
     return get_service().update_collection(
         key, version, name=name, parent_key=parent_key
     )
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Move Zotero Item to Trash",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def trash_item(key: str, version: int) -> dict:
+    """Move an item to the trash (soft delete). Unlike
+    delete_item_permanently, this is reversible via restore_from_trash --
+    prefer it whenever a delete might need to be undone. Safe,
+    key-preserving: the item's key is unchanged, so a Word citation
+    referencing it keeps resolving unless/until it's later permanently
+    deleted (e.g. via delete_item_permanently, or "Empty Trash" in the
+    Zotero desktop app).
+
+    version: the item's current version (from search_items/get_item) --
+    refused if stale, same as update_item.
+    """
+    return get_service().trash_item(key, version)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Restore Zotero Item from Trash",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def restore_from_trash(key: str, version: int) -> dict:
+    """Remove an item from the trash, restoring it to the library. Safe,
+    key-preserving. version: the item's current version (from
+    list_trash)."""
+    return get_service().restore_from_trash(key, version)
 
 
 @mcp.tool(
