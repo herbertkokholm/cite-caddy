@@ -459,3 +459,28 @@ class FakeZotero:
 
     def groups(self, **kwargs: Any) -> list[dict]:
         return list(self._groups)
+
+    def item_types(self, **kwargs: Any) -> list[dict]:
+        return [
+            {"itemType": "book", "localized": "Book"},
+            {"itemType": "journalArticle", "localized": "Journal Article"},
+        ]
+
+    def item_fields(self, **kwargs: Any) -> list[dict]:
+        return [
+            {"field": "title", "localized": "Title"},
+            {"field": "date", "localized": "Date"},
+            {"field": "publicationTitle", "localized": "Publication"},
+        ]
+
+    def item_type_fields(self, itemtype: str, **kwargs: Any) -> list[dict]:
+        return [
+            {"field": "title", "localized": "Title"},
+            {"field": "date", "localized": "Date"},
+        ]
+
+    def item_creator_types(self, itemtype: str, **kwargs: Any) -> list[dict]:
+        return [
+            {"creatorType": "author", "localized": "Author"},
+            {"creatorType": "editor", "localized": "Editor"},
+        ]

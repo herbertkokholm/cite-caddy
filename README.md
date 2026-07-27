@@ -91,11 +91,16 @@ access), so it can be revoked independently if it ever leaks.
 ## Tools
 
 Read-only: `search_items`, `get_item`, `list_collections`, `list_tags`,
-`list_trash`, `list_saved_searches`, `list_groups`, `list_attachments`,
-`get_fulltext`, `download_attachment`, `list_notes`. `list_groups` lists
-the groups the configured API key's account belongs to; its `id` doubles
-as `target_library_id` (with `target_library_type="group"`) for
-`move_item_to_different_library`.
+`list_trash`, `list_saved_searches`, `list_groups`, `list_item_types`,
+`list_item_fields`, `list_item_type_fields`, `list_item_creator_types`,
+`list_attachments`, `get_fulltext`, `download_attachment`, `list_notes`.
+`list_groups` lists the groups the configured API key's account belongs
+to; its `id` doubles as `target_library_id` (with
+`target_library_type="group"`) for `move_item_to_different_library`.
+`list_item_type_fields`/`list_item_creator_types` describe what
+`create_item`/`update_item` will actually accept for a given
+`item_type` -- check them instead of guessing when a validation error
+comes back.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
 `create_saved_search`, `update_collection`, `update_item`,

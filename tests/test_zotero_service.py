@@ -89,6 +89,29 @@ def test_list_groups(service, fake_zot):
     ]
 
 
+# ---- schema introspection --------------------------------------------------
+
+
+def test_list_item_types(service):
+    result = service.list_item_types()
+    assert {"item_type": "book", "localized": "Book"} in result
+
+
+def test_list_item_fields(service):
+    result = service.list_item_fields()
+    assert {"field": "title", "localized": "Title"} in result
+
+
+def test_list_item_type_fields(service):
+    result = service.list_item_type_fields("book")
+    assert {"field": "date", "localized": "Date"} in result
+
+
+def test_list_item_creator_types(service):
+    result = service.list_item_creator_types("book")
+    assert {"creator_type": "author", "localized": "Author"} in result
+
+
 # ---- trash ---------------------------------------------------------------
 
 

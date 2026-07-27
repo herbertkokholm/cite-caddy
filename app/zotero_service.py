@@ -307,6 +307,53 @@ class ZoteroService:
             raise _translate(exc) from exc
         return [_group_summary(g) for g in raw]
 
+    # ---- schema introspection (read) -------------------------------------
+
+    def list_item_types(self) -> list[dict]:
+        """List every Zotero item type (e.g. "book", "journalArticle",
+        "webpage") -- valid values for create_item's item_type argument.
+        Read-only."""
+        try:
+            raw = self.zot.item_types()
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [{"item_type": t["itemType"], "localized": t["localized"]} for t in raw]
+
+    def list_item_fields(self) -> list[dict]:
+        """List every bibliographic field Zotero recognizes across all
+        item types combined -- not which fields are valid for one
+        specific type (see list_item_type_fields for that, which is what
+        create_item actually needs). Read-only."""
+        try:
+            raw = self.zot.item_fields()
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [{"field": f["field"], "localized": f["localized"]} for f in raw]
+
+    def list_item_type_fields(self, item_type: str) -> list[dict]:
+        """List the bibliographic fields valid for one item type -- only
+        these keys are valid in create_item/update_item's `fields`
+        argument for this item_type; anything else raises a validation
+        error. Read-only."""
+        try:
+            raw = self.zot.item_type_fields(item_type)
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [{"field": f["field"], "localized": f["localized"]} for f in raw]
+
+    def list_item_creator_types(self, item_type: str) -> list[dict]:
+        """List the valid `creatorType` values (e.g. "author", "editor")
+        for one item type -- for create_item/update_item's `creators`
+        entries, e.g. {"creatorType": "author", ...}. Read-only."""
+        try:
+            raw = self.zot.item_creator_types(item_type)
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [
+            {"creator_type": c["creatorType"], "localized": c["localized"]}
+            for c in raw
+        ]
+
     # ---- attachments & fulltext (read) ----------------------------------
 
     def list_attachments(self, item_key: str) -> list[dict]:

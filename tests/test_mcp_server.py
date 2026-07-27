@@ -94,6 +94,18 @@ def test_list_groups_tool(fake_service):
     assert result[0]["name"] == "Lab Group"
 
 
+def test_schema_introspection_tools(fake_service):
+    assert {"item_type": "book", "localized": "Book"} in mcp_server.list_item_types()
+    assert {"field": "title", "localized": "Title"} in mcp_server.list_item_fields()
+    assert {"field": "date", "localized": "Date"} in mcp_server.list_item_type_fields(
+        "book"
+    )
+    assert {
+        "creator_type": "author",
+        "localized": "Author",
+    } in mcp_server.list_item_creator_types("book")
+
+
 def test_trash_tools(fake_service):
     item = fake_service.seed_item("book", {"title": "Doomed"})
 

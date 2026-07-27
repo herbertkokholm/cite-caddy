@@ -1,8 +1,9 @@
 """Remote MCP server exposing full read/write access to a Zotero library
 (search, add, tag, update, delete, move, attachments, full text, notes,
 collection rename/delete, library-wide tag rename/delete, trash view/
-move/restore, saved searches, groups) -- see README for the key safety
-note on delete/move breaking Word-plugin citations.
+move/restore, saved searches, groups, item-type/field/creator-type
+schema introspection) -- see README for the key safety note on
+delete/move breaking Word-plugin citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
 over streamable-http, bound to 0.0.0.0:$PORT"; without $PORT, this runs
@@ -79,8 +80,9 @@ _INSTRUCTIONS = (
     "Full read/write access to a Zotero library: search, add, tag, update, "
     "delete, and move items; create, rename/move, and delete collections; "
     "list/rename/delete tags library-wide; view/create/delete saved "
-    "searches; list groups; list/download/upload item attachments and "
-    "read their extracted full text; list/add/edit item notes. Mutating "
+    "searches; list groups; look up valid item types/fields/creator "
+    "types; list/download/upload item attachments and read their "
+    "extracted full text; list/add/edit item notes. Mutating "
     "tools that touch an existing item or collection require its current "
     "`version` (from search_items/get_item/list_collections) and refuse "
     "the write if it's stale -- re-fetch and retry in that case, don't "
@@ -96,8 +98,13 @@ _INSTRUCTIONS = (
     "restore_from_trash); delete_item_permanently is not reversible -- "
     "prefer trash_item when a delete might need to be undone. "
     "list_groups' results (`id`, with target_library_type=\"group\") are "
-    "for target_library_id on move_item_to_different_library. Attachment "
-    "file content travels as base64 (upload_attachment's content_base64, "
+    "for target_library_id on move_item_to_different_library. "
+    "list_item_types/list_item_type_fields/list_item_creator_types "
+    "describe what create_item/update_item will actually accept for a "
+    "given item_type -- check them instead of guessing when a create/"
+    "update call raises a validation error, or before constructing "
+    "fields/creators for an unfamiliar item_type. Attachment file "
+    "content travels as base64 (upload_attachment's content_base64, "
     "download_attachment's content_base64 in the result) since this "
     "server runs remotely with no access to the caller's local "
     "filesystem."
@@ -323,6 +330,64 @@ def list_groups() -> list[dict]:
     move_item_to_different_library, if the group you want isn't this
     server's own configured library."""
     return get_service().list_groups()
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Item Types",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_item_types() -> list[dict]:
+    """List every Zotero item type (e.g. "book", "journalArticle",
+    "webpage") -- valid values for create_item's item_type argument.
+    Read-only."""
+    return get_service().list_item_types()
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Item Fields",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_item_fields() -> list[dict]:
+    """List every bibliographic field Zotero recognizes across all item
+    types combined -- not which fields are valid for one specific type
+    (see list_item_type_fields for that, which is what create_item
+    actually needs). Read-only."""
+    return get_service().list_item_fields()
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Fields for a Zotero Item Type",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_item_type_fields(item_type: str) -> list[dict]:
+    """List the bibliographic fields valid for one item type -- only
+    these keys are valid in create_item/update_item's `fields` argument
+    for this item_type; anything else raises a validation error.
+    Read-only."""
+    return get_service().list_item_type_fields(item_type)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Creator Types for a Zotero Item Type",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_item_creator_types(item_type: str) -> list[dict]:
+    """List the valid `creatorType` values (e.g. "author", "editor") for
+    one item type -- for create_item/update_item's `creators` entries,
+    e.g. {"creatorType": "author", ...}. Read-only."""
+    return get_service().list_item_creator_types(item_type)
 
 
 @mcp.tool(
