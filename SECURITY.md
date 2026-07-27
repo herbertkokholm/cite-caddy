@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-This project doesn't do versioned releases — only the latest commit on
-`main` is supported.
+Tagged releases (starting with v1.0.0) mark milestones, but this project
+is continuously deployed from `main` — only the latest commit on `main`
+is supported. There's no backporting fixes to older tags.
 
 ## Reporting a vulnerability
 

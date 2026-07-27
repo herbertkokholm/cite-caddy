@@ -3,7 +3,9 @@
 A standalone, remote MCP server giving full read/write access to a Zotero
 library — search, add, tag, update, delete, and move items; create, rename,
 and delete collections; upload/download attachments and read their
-extracted full text; read and write item notes.
+extracted full text; read and write item notes; manage tags, trash, and
+saved searches library-wide; and look up Zotero's own item-type/field
+schema. 36 tools total — see [Tools](#tools) below for the full list.
 
 ## Why this exists
 
@@ -148,7 +150,9 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 
 ## Status
 
-Deployed and in active use. Add it as a remote MCP connector directly
+**v1.0** — deployed and in active use, with full CRUD coverage of the
+Zotero Web API's item/collection/tag/trash/saved-search/schema surface
+(36 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the
 server's public URL) — the OAuth flow described above prompts for
 username/password in-browser, no manually-configured headers needed.
