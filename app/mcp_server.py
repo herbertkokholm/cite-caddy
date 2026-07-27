@@ -1,7 +1,7 @@
 """Remote MCP server exposing full read/write access to a Zotero library
-(search, add, tag, update, delete, move, attachments, full text, notes) --
-see README for the key safety note on delete/move breaking Word-plugin
-citations.
+(search, add, tag, update, delete, move, attachments, full text, notes,
+collection rename/delete) -- see README for the key safety note on
+delete/move breaking Word-plugin citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
 over streamable-http, bound to 0.0.0.0:$PORT"; without $PORT, this runs
@@ -76,19 +76,21 @@ load_dotenv()
 _PORT = os.environ.get("PORT")
 _INSTRUCTIONS = (
     "Full read/write access to a Zotero library: search, add, tag, update, "
-    "delete, and move items and collections; list/download/upload item "
-    "attachments and read their extracted full text; list/add/edit item "
-    "notes. Mutating tools that touch an existing item require its current "
-    "`version` (from "
-    "search_items/get_item) and refuse the write if it's stale -- re-fetch "
-    "and retry in that case, don't just resend the same version. "
-    "delete_item_permanently and move_item_to_different_library break any "
-    "Word-document citation referencing the item's key; prefer "
+    "delete, and move items; create, rename/move, and delete collections; "
+    "list/download/upload item attachments and read their extracted full "
+    "text; list/add/edit item notes. Mutating tools that touch an "
+    "existing item or collection require its current `version` (from "
+    "search_items/get_item/list_collections) and refuse the write if it's "
+    "stale -- re-fetch and retry in that case, don't just resend the same "
+    "version. delete_item_permanently and move_item_to_different_library "
+    "break any Word-document citation referencing the item's key; prefer "
     "add_to_collection/remove_from_collection for in-library "
-    "reorganization, which is safe. Attachment file content travels as "
-    "base64 (upload_attachment's content_base64, download_attachment's "
-    "content_base64 in the result) since this server runs remotely with "
-    "no access to the caller's local filesystem."
+    "reorganization, which is safe. delete_collection cascades to any "
+    "sub-collections but never deletes the items filed in them. Attachment "
+    "file content travels as base64 (upload_attachment's content_base64, "
+    "download_attachment's content_base64 in the result) since this "
+    "server runs remotely with no access to the caller's local "
+    "filesystem."
 )
 
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
@@ -383,6 +385,35 @@ def create_collection(name: str, parent_key: str | None = None) -> dict:
 
 @mcp.tool(
     annotations=ToolAnnotations(
+        title="Rename or Move Zotero Collection",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def update_collection(
+    key: str, version: int, name: str | None = None, parent_key: str | None = None
+) -> dict:
+    """Rename and/or move (reparent) a collection, in place. Safe: the
+    collection's key is unchanged, so items filed in it and any
+    sub-collections stay put.
+
+    name: new name; omit to leave the current name unchanged.
+    parent_key: new parent collection's key, to nest this collection
+        under it; pass "" (empty string) to move it to the top level (out
+        of any parent); omit entirely to leave the parent unchanged. At
+        least one of name/parent_key must be given.
+    version: the collection's current version (from list_collections) --
+        refused if stale, same as update_item.
+    """
+    return get_service().update_collection(
+        key, version, name=name, parent_key=parent_key
+    )
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
         title="Upload Attachment",
         readOnlyHint=False,
         destructiveHint=False,
@@ -585,6 +616,32 @@ def delete_item_permanently(key: str, version: int) -> dict:
     with the item.
     """
     return get_service().delete_item(key, version)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Delete Zotero Collection",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def delete_collection(key: str, version: int) -> dict:
+    """DESTRUCTIVE -- permanently deletes the collection. Matches
+    Zotero's own "Delete Collection" behavior: any sub-collections nested
+    under it are deleted too, cascading -- but items filed in it (or in a
+    deleted sub-collection) are NOT deleted from the library, only
+    unfiled from that collection.
+
+    There is no confirmation step at this layer; check list_collections
+    for sub-collections first if that matters before calling this.
+
+    version: the collection's current version (from list_collections) --
+    the delete is refused if this doesn't match the server's current
+    version.
+    """
+    return get_service().delete_collection(key, version)
 
 
 @mcp.tool(

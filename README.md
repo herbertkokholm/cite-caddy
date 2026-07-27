@@ -1,8 +1,9 @@
 # zotero-mcp
 
 A standalone, remote MCP server giving full read/write access to a Zotero
-library — search, add, tag, update, delete, and move items; upload/download
-attachments and read their extracted full text; read and write item notes.
+library — search, add, tag, update, delete, and move items; create, rename,
+and delete collections; upload/download attachments and read their
+extracted full text; read and write item notes.
 
 ## Why this exists
 
@@ -93,15 +94,18 @@ Read-only: `search_items`, `get_item`, `list_collections`, `list_attachments`,
 `get_fulltext`, `download_attachment`, `list_notes`.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
-`update_item`, `add_tags`/`remove_tags`/`set_tags`,
+`update_collection`, `update_item`, `add_tags`/`remove_tags`/`set_tags`,
 `add_to_collection`/`remove_from_collection`, `upload_attachment`,
 `create_note`, `update_note`.
 
 Destructive (see "Key safety" above): `delete_item_permanently`,
-`move_item_to_different_library`. Both require the item's current Zotero
-`version` (get it from `search_items`/`get_item` first) and refuse the call
-if it doesn't match the server's current version, rather than silently
-overwriting a concurrent change.
+`move_item_to_different_library`, `delete_collection`. All three require
+the item's/collection's current Zotero `version` (get it from
+`search_items`/`get_item`/`list_collections` first) and refuse the call if
+it doesn't match the server's current version, rather than silently
+overwriting a concurrent change. `delete_collection` cascades to any
+sub-collections (matching Zotero's own "Delete Collection" behavior) but
+never deletes the items filed in them.
 
 Attachment file content (`upload_attachment`'s `content_base64` argument,
 `download_attachment`'s `content_base64` result) travels base64-encoded —

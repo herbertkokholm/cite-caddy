@@ -309,6 +309,51 @@ class FakeZotero:
     def collections(self, **kwargs: Any) -> list[dict]:
         return list(self._collections.values())
 
+    def collection(self, collection: str, **kwargs: Any) -> dict:
+        try:
+            return self._collections[collection]
+        except KeyError:
+            raise zotero_errors.ResourceNotFoundError(
+                f"No collection {collection}"
+            ) from None
+
+    def update_collection(
+        self, payload: dict[str, Any], last_modified: int | None = None
+    ) -> None:
+        key = payload["key"]
+        if key not in self._collections:
+            raise zotero_errors.ResourceNotFoundError(f"No collection {key}")
+        current = self._collections[key]
+        expected_version = (
+            last_modified if last_modified is not None else payload["version"]
+        )
+        if current["data"]["version"] != expected_version:
+            raise zotero_errors.PreConditionFailedError(
+                f"Version mismatch for {key}: expected "
+                f"{current['data']['version']}, got {expected_version}"
+            )
+        changes = {k: v for k, v in payload.items() if k not in ("key", "version")}
+        current["data"].update(changes)
+        current["data"]["version"] += 1
+        current["version"] = current["data"]["version"]
+
+    def delete_collection(
+        self, payload: dict[str, Any], last_modified: int | None = None
+    ) -> None:
+        key = payload["key"]
+        if key not in self._collections:
+            raise zotero_errors.ResourceNotFoundError(f"No collection {key}")
+        current = self._collections[key]
+        expected_version = (
+            last_modified if last_modified is not None else payload["version"]
+        )
+        if current["data"]["version"] != expected_version:
+            raise zotero_errors.PreConditionFailedError(
+                f"Version mismatch for {key}: expected "
+                f"{current['data']['version']}, got {expected_version}"
+            )
+        del self._collections[key]
+
     def create_collections(self, payload: list[dict[str, Any]], **_: Any) -> dict:
         success: dict[str, str] = {}
         for i, item in enumerate(payload):

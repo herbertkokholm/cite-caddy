@@ -90,6 +90,17 @@ def test_collection_tools(fake_service):
     assert updated["collections"] == []
 
 
+def test_update_and_delete_collection_tools(fake_service):
+    coll = mcp_server.create_collection("Old Name")
+
+    renamed = mcp_server.update_collection(coll["key"], version=1, name="New Name")
+    assert renamed["name"] == "New Name"
+
+    result = mcp_server.delete_collection(renamed["key"], version=renamed["version"])
+    assert result["deleted"] is True
+    assert mcp_server.list_collections() == []
+
+
 def test_attachment_and_fulltext_tools(fake_service):
     parent = fake_service.seed_item("journalArticle", {"title": "Host"})
     content = base64.b64encode(b"pdf bytes").decode("ascii")

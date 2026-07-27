@@ -3,6 +3,7 @@ import base64
 import pytest
 
 from app.zotero_service import (
+    CollectionNotFoundError,
     ItemNotFoundError,
     ValidationError,
     VersionConflictError,
@@ -323,6 +324,80 @@ def test_create_collection(service):
     created = service.create_collection("New Collection")
     assert created["name"] == "New Collection"
     assert created["key"]
+
+
+# ---- collection management -------------------------------------------------
+
+
+def test_update_collection_renames(service, fake_zot):
+    coll = fake_zot.seed_collection("Old Name")
+
+    updated = service.update_collection(coll["key"], version=1, name="New Name")
+
+    assert updated["name"] == "New Name"
+    assert updated["key"] == coll["key"]  # key preserved
+
+
+def test_update_collection_reparents_without_touching_name(service, fake_zot):
+    parent = fake_zot.seed_collection("Parent")
+    coll = fake_zot.seed_collection("Child", parent_key=None)
+
+    updated = service.update_collection(coll["key"], version=1, parent_key=parent["key"])
+
+    assert updated["name"] == "Child"  # unchanged
+    assert updated["parent_collection"] == parent["key"]
+
+
+def test_update_collection_moves_to_top_level(service, fake_zot):
+    parent = fake_zot.seed_collection("Parent")
+    coll = fake_zot.seed_collection("Child", parent_key=parent["key"])
+
+    updated = service.update_collection(coll["key"], version=1, parent_key="")
+
+    assert updated["parent_collection"] is None
+
+
+def test_update_collection_requires_a_field(service, fake_zot):
+    coll = fake_zot.seed_collection("Name")
+    with pytest.raises(ValidationError):
+        service.update_collection(coll["key"], version=1)
+
+
+def test_update_collection_version_conflict(service, fake_zot):
+    coll = fake_zot.seed_collection("Old")
+    service.update_collection(coll["key"], version=1, name="Changed elsewhere")
+
+    with pytest.raises(VersionConflictError):
+        service.update_collection(coll["key"], version=1, name="Clobber attempt")
+
+
+def test_update_collection_not_found(service):
+    with pytest.raises(CollectionNotFoundError):
+        service.update_collection("MISSING", version=1, name="X")
+
+
+def test_delete_collection_not_found(service):
+    with pytest.raises(CollectionNotFoundError):
+        service.delete_collection("MISSING", version=1)
+
+
+def test_delete_collection(service, fake_zot):
+    coll = fake_zot.seed_collection("Doomed")
+
+    result = service.delete_collection(coll["key"], version=1)
+
+    assert result["deleted"] is True
+    assert service.list_collections() == []
+
+
+def test_delete_collection_version_conflict_does_not_delete(service, fake_zot):
+    coll = fake_zot.seed_collection("Old")
+    service.update_collection(coll["key"], version=1, name="Changed elsewhere")
+
+    with pytest.raises(VersionConflictError):
+        service.delete_collection(coll["key"], version=1)
+
+    assert len(service.list_collections()) == 1
 
 
 # ---- destructive: delete ------------------------------------------------

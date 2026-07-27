@@ -78,9 +78,17 @@ class ZoteroApiError(ZoteroServiceError):
     HTTP errors, etc.)."""
 
 
-def _translate(exc: Exception, *, key: str | None = None) -> ZoteroServiceError:
+def _translate(
+    exc: Exception,
+    *,
+    key: str | None = None,
+    not_found_cls: type[ZoteroServiceError] = ItemNotFoundError,
+    noun: str = "item",
+) -> ZoteroServiceError:
     if isinstance(exc, zotero_errors.ResourceNotFoundError):
-        return ItemNotFoundError(f"No item found for key {key!r}" if key else str(exc))
+        return not_found_cls(
+            f"No {noun} found for key {key!r}" if key else str(exc)
+        )
     if isinstance(
         exc,
         (
@@ -89,10 +97,10 @@ def _translate(exc: Exception, *, key: str | None = None) -> ZoteroServiceError:
         ),
     ):
         return VersionConflictError(
-            f"Version mismatch on {key!r} -- the item was modified since the "
-            "version you passed was read (e.g. edited in the Zotero desktop "
-            "app). Re-fetch the item to see the current state and version "
-            "before retrying."
+            f"Version mismatch on {key!r} -- the {noun} was modified since "
+            "the version you passed was read (e.g. edited in the Zotero "
+            "desktop app). Re-fetch it to see the current state and "
+            "version before retrying."
             if key
             else str(exc)
         )
@@ -132,6 +140,16 @@ def _attachment_summary(item: dict) -> dict:
         "link_mode": data.get("linkMode", ""),
         "parent_item": data.get("parentItem"),
         "tags": [t["tag"] for t in data.get("tags", []) if t.get("tag")],
+    }
+
+
+def _collection_summary(collection: dict) -> dict:
+    data = collection["data"]
+    return {
+        "key": data["key"],
+        "version": data["version"],
+        "name": data["name"],
+        "parent_collection": data.get("parentCollection") or None,
     }
 
 
@@ -218,15 +236,7 @@ class ZoteroService:
             raw = self.zot.collections()
         except Exception as exc:
             raise _translate(exc) from exc
-        return [
-            {
-                "key": c["data"]["key"],
-                "version": c["data"]["version"],
-                "name": c["data"]["name"],
-                "parent_collection": c["data"].get("parentCollection") or None,
-            }
-            for c in raw
-        ]
+        return [_collection_summary(c) for c in raw]
 
     # ---- attachments & fulltext (read) ----------------------------------
 
@@ -434,6 +444,61 @@ class ZoteroService:
             "parent_collection": parent_key or None,
         }
 
+    def update_collection(
+        self,
+        key: str,
+        version: int,
+        name: str | None = None,
+        parent_key: str | None = None,
+    ) -> dict:
+        """Rename and/or move (reparent) a collection, in place. Safe:
+        the collection's key is unchanged, so items filed in it and any
+        sub-collections stay put.
+
+        name: new name; omit to leave the current name unchanged.
+        parent_key: new parent collection's key, to nest this collection
+            under it; pass "" (empty string) to move it to the top level
+            (out of any parent); omit entirely to leave the parent
+            unchanged. At least one of name/parent_key must be given.
+
+        Zotero's collection-update endpoint replaces the whole collection
+        record rather than patching individual fields, so this fetches
+        the collection's current name/parent first and only overrides
+        the field(s) explicitly passed.
+
+        version: the collection's current version (from list_collections)
+        -- refused if stale, same as update_item.
+        """
+        if name is None and parent_key is None:
+            raise ValidationError(
+                "update_collection requires name and/or parent_key -- "
+                "nothing to change"
+            )
+        try:
+            current = self.zot.collection(key)["data"]
+        except Exception as exc:
+            raise _translate(
+                exc, key=key, not_found_cls=CollectionNotFoundError, noun="collection"
+            ) from exc
+        payload = {
+            "key": key,
+            "version": version,
+            "name": name if name is not None else current.get("name", ""),
+            "parentCollection": (
+                current.get("parentCollection", False)
+                if parent_key is None
+                else (parent_key or False)
+            ),
+        }
+        try:
+            self.zot.update_collection(payload)
+            updated = self.zot.collection(key)
+        except Exception as exc:
+            raise _translate(
+                exc, key=key, not_found_cls=CollectionNotFoundError, noun="collection"
+            ) from exc
+        return _collection_summary(updated)
+
     # ---- attachments (create) --------------------------------------------
 
     def upload_attachment(
@@ -541,6 +606,27 @@ class ZoteroService:
             self.zot.delete_item({"key": key, "version": version})
         except Exception as exc:
             raise _translate(exc, key=key) from exc
+        return {"key": key, "deleted": True}
+
+    def delete_collection(self, key: str, version: int) -> dict:
+        """DESTRUCTIVE. Permanently deletes the collection. Matches
+        Zotero's own "Delete Collection" behavior: any sub-collections
+        nested under it are deleted too, cascading -- but items filed in
+        it (or in a deleted sub-collection) are NOT deleted from the
+        library, only unfiled from that collection.
+
+        There is no confirmation step at this layer; the caller is
+        responsible for making sure this is really what's wanted,
+        including checking list_collections for sub-collections first if
+        that matters. `version` must match the collection's current
+        version or the call is refused (VersionConflictError).
+        """
+        try:
+            self.zot.delete_collection({"key": key, "version": version})
+        except Exception as exc:
+            raise _translate(
+                exc, key=key, not_found_cls=CollectionNotFoundError, noun="collection"
+            ) from exc
         return {"key": key, "deleted": True}
 
     # ---- destructive: cross-library move --------------------------------
