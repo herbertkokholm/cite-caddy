@@ -51,6 +51,7 @@ from mcp.server.auth.settings import (
     RevocationOptions,
 )
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
@@ -191,7 +192,13 @@ def configure_service(service: ZoteroService) -> None:
 # ---- read --------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Search Zotero Items",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
 def search_items(
     query: str = "",
     item_type: str | None = None,
@@ -225,7 +232,13 @@ def search_items(
     )
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Get Zotero Item",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
 def get_item(key: str) -> dict:
     """Fetch one item by key. Read-only. Use this to get an item's current
     `version` right before a mutating call, if you don't already have a
@@ -233,7 +246,13 @@ def get_item(key: str) -> dict:
     return get_service().get_item(key)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Collections",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
 def list_collections() -> list[dict]:
     """List all collections in the library (key, name, parent_collection).
     Read-only."""
@@ -243,7 +262,15 @@ def list_collections() -> list[dict]:
 # ---- create (safe) -------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Create Zotero Item",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 def create_item(
     item_type: str,
     fields: dict[str, str] | None = None,
@@ -271,7 +298,15 @@ def create_item(
     )
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Create Zotero Collection",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 def create_collection(name: str, parent_key: str | None = None) -> dict:
     """Create a new collection, optionally nested under parent_key. Safe."""
     return get_service().create_collection(name, parent_key=parent_key)
@@ -280,7 +315,15 @@ def create_collection(name: str, parent_key: str | None = None) -> dict:
 # ---- update (safe, key-preserving) --------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Update Zotero Item Fields",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def update_item(key: str, version: int, fields: dict[str, Any]) -> dict:
     """Edit bibliographic fields (title, date, DOI, url, abstractNote,
     publicationTitle, creators, etc.) on an existing item, in place. Safe:
@@ -298,21 +341,45 @@ def update_item(key: str, version: int, fields: dict[str, Any]) -> dict:
     return get_service().update_item(key, version, fields)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Add Tags to Zotero Item",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def add_tags(key: str, version: int, tags: list[str]) -> dict:
     """Add one or more tags to an item, keeping its existing tags. Safe,
     key-preserving. version: the item's current version (see update_item)."""
     return get_service().add_tags(key, version, tags)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Remove Tags from Zotero Item",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def remove_tags(key: str, version: int, tags: list[str]) -> dict:
     """Remove one or more tags from an item; other tags are kept. Safe,
     key-preserving. version: the item's current version (see update_item)."""
     return get_service().remove_tags(key, version, tags)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Set Zotero Item Tags",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def set_tags(key: str, version: int, tags: list[str]) -> dict:
     """Replace ALL of an item's tags with exactly this list (not merged --
     use add_tags/remove_tags to change tags incrementally instead). Safe,
@@ -320,7 +387,15 @@ def set_tags(key: str, version: int, tags: list[str]) -> dict:
     return get_service().set_tags(key, version, tags)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Add Item to Zotero Collection",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def add_to_collection(key: str, version: int, collection_key: str) -> dict:
     """File an item into a collection, in addition to any it's already in.
     Safe, key-preserving reorganization within the same library -- prefer
@@ -330,7 +405,15 @@ def add_to_collection(key: str, version: int, collection_key: str) -> dict:
     return get_service().add_to_collection(key, version, collection_key)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Remove Item from Zotero Collection",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def remove_from_collection(key: str, version: int, collection_key: str) -> dict:
     """Remove an item from one collection; it stays in the library and any
     other collections it's filed under. Safe, key-preserving.
@@ -341,7 +424,15 @@ def remove_from_collection(key: str, version: int, collection_key: str) -> dict:
 # ---- destructive ----------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Delete Zotero Item Permanently",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 def delete_item_permanently(key: str, version: int) -> dict:
     """DESTRUCTIVE -- permanently deletes the item from its library. Cannot
     be undone through this server.
@@ -360,7 +451,15 @@ def delete_item_permanently(key: str, version: int) -> dict:
     return get_service().delete_item(key, version)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Move Zotero Item to Different Library",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 def move_item_to_different_library(
     key: str, version: int, target_library_id: str, target_library_type: str
 ) -> dict:
