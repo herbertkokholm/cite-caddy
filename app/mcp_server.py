@@ -1,6 +1,6 @@
 """Remote MCP server exposing full read/write access to a Zotero library
-(search, add, tag, update, delete, move, attachments, full text) -- see
-README for the key safety note on delete/move breaking Word-plugin
+(search, add, tag, update, delete, move, attachments, full text, notes) --
+see README for the key safety note on delete/move breaking Word-plugin
 citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
@@ -77,8 +77,9 @@ _PORT = os.environ.get("PORT")
 _INSTRUCTIONS = (
     "Full read/write access to a Zotero library: search, add, tag, update, "
     "delete, and move items and collections; list/download/upload item "
-    "attachments and read their extracted full text. Mutating tools that "
-    "touch an existing item require its current `version` (from "
+    "attachments and read their extracted full text; list/add/edit item "
+    "notes. Mutating tools that touch an existing item require its current "
+    "`version` (from "
     "search_items/get_item) and refuse the write if it's stale -- re-fetch "
     "and retry in that case, don't just resend the same version. "
     "delete_item_permanently and move_item_to_different_library break any "
@@ -313,6 +314,20 @@ def download_attachment(attachment_key: str) -> dict:
     return get_service().download_attachment(attachment_key)
 
 
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Item Notes",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_notes(item_key: str) -> list[dict]:
+    """List the notes filed under an item -- not its file attachments
+    (see list_attachments for those). Read-only. Each result includes
+    full note content and `version` -- pass both to update_note."""
+    return get_service().list_notes(item_key)
+
+
 # ---- create (safe) -------------------------------------------------------
 
 
@@ -395,6 +410,29 @@ def upload_attachment(
     )
 
 
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Create Item Note",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
+def create_note(parent_key: str, content: str, tags: list[str] | None = None) -> dict:
+    """Add a new note as a child of an existing item (e.g. a research
+    note attached to a journalArticle). Safe: creates a brand-new note
+    item with its own key; never touches the parent item's own fields or
+    version.
+
+    content: the note's body, as Zotero-flavored HTML (e.g. "<p>Some
+        observation.</p>") -- Zotero derives the note's display title
+        from the first line of this content.
+    tags: plain tag strings.
+    """
+    return get_service().create_note(parent_key, content, tags=tags)
+
+
 # ---- update (safe, key-preserving) --------------------------------------
 
 
@@ -422,6 +460,21 @@ def update_item(key: str, version: int, fields: dict[str, Any]) -> dict:
     set_tags and add_to_collection/remove_from_collection for those.
     """
     return get_service().update_item(key, version, fields)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Update Item Note",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def update_note(key: str, version: int, content: str) -> dict:
+    """Edit a note's content, in place. Safe, key-preserving.
+    version: the note's current version (from list_notes)."""
+    return get_service().update_note(key, version, content)
 
 
 @mcp.tool(

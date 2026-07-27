@@ -103,6 +103,29 @@ class FakeZotero:
     def seed_fulltext(self, key: str, content: str, **extra: Any) -> None:
         self._fulltext[key] = {"content": content, **extra}
 
+    def seed_note(
+        self, parent_key: str, content: str = "<p>A note.</p>", **extra: Any
+    ) -> dict:
+        key = self._new_key()
+        full = {
+            "key": key,
+            "version": 1,
+            "library": {"type": self.library_type, "id": self.library_id},
+            "links": {},
+            "meta": {},
+            "data": {
+                "key": key,
+                "version": 1,
+                "itemType": "note",
+                "note": content,
+                "parentItem": parent_key,
+                "tags": [],
+                **extra,
+            },
+        }
+        self._items[key] = full
+        return full
+
     def _new_key(self) -> str:
         key = f"KEY{self._next_id}"
         self._next_id += 1
@@ -119,18 +142,25 @@ class FakeZotero:
             "collections": [],
         }
 
-    def create_items(self, payload: list[dict[str, Any]], **_: Any) -> dict:
+    def create_items(
+        self, payload: list[dict[str, Any]], parentid: str | None = None, **_: Any
+    ) -> dict:
+        if parentid is not None and parentid not in self._items:
+            raise zotero_errors.ResourceNotFoundError(f"No item {parentid}")
         success: dict[str, str] = {}
         successful: dict[str, dict] = {}
         for i, data in enumerate(payload):
             key = self._new_key()
+            item_data = {**data, "key": key, "version": 1}
+            if parentid:
+                item_data["parentItem"] = parentid
             full = {
                 "key": key,
                 "version": 1,
                 "library": {"type": self.library_type, "id": self.library_id},
                 "links": {},
                 "meta": {},
-                "data": {**data, "key": key, "version": 1},
+                "data": item_data,
             }
             self._items[key] = full
             success[str(i)] = key

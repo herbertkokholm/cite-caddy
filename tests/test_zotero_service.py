@@ -109,6 +109,62 @@ def test_download_attachment_not_found(service):
         service.download_attachment("MISSING")
 
 
+# ---- notes -------------------------------------------------------------
+
+
+def test_create_note(service, fake_zot):
+    parent = fake_zot.seed_item("journalArticle", {"title": "Host Item"})
+
+    created = service.create_note(
+        parent["key"], "<p>Interesting finding.</p>", tags=["important"]
+    )
+
+    assert created["content"] == "<p>Interesting finding.</p>"
+    assert created["parent_item"] == parent["key"]
+    assert created["tags"] == ["important"]
+    assert created["key"]
+
+
+def test_create_note_parent_not_found(service):
+    with pytest.raises(ItemNotFoundError):
+        service.create_note("MISSING", "<p>Orphaned.</p>")
+
+
+def test_list_notes_excludes_attachments(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle")
+    note = fake_zot.seed_note(item["key"], "<p>Note content.</p>")
+    fake_zot.seed_attachment(item["key"], title="paper.pdf")
+
+    results = service.list_notes(item["key"])
+
+    assert [r["key"] for r in results] == [note["key"]]
+    assert results[0]["content"] == "<p>Note content.</p>"
+
+
+def test_list_notes_item_not_found(service):
+    with pytest.raises(ItemNotFoundError):
+        service.list_notes("MISSING")
+
+
+def test_update_note(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle")
+    note = fake_zot.seed_note(item["key"], "<p>Old content.</p>")
+
+    updated = service.update_note(note["key"], version=1, content="<p>New content.</p>")
+
+    assert updated["content"] == "<p>New content.</p>"
+    assert updated["key"] == note["key"]  # key preserved
+
+
+def test_update_note_version_conflict(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle")
+    note = fake_zot.seed_note(item["key"], "<p>Old.</p>")
+    service.update_note(note["key"], version=1, content="<p>Changed elsewhere.</p>")
+
+    with pytest.raises(VersionConflictError):
+        service.update_note(note["key"], version=1, content="<p>Clobber attempt.</p>")
+
+
 # ---- attachments (create) ---------------------------------------------------
 
 

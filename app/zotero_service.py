@@ -135,6 +135,19 @@ def _attachment_summary(item: dict) -> dict:
     }
 
 
+def _note_summary(item: dict) -> dict:
+    """Reduces a raw Zotero note item to the fields a caller needs to
+    read its content and write it back via update_note."""
+    data = item.get("data", {})
+    return {
+        "key": data.get("key") or item.get("key"),
+        "version": data.get("version", item.get("version")),
+        "content": data.get("note", ""),
+        "parent_item": data.get("parentItem"),
+        "tags": [t["tag"] for t in data.get("tags", []) if t.get("tag")],
+    }
+
+
 def _item_summary(item: dict) -> dict:
     """Reduces a raw Zotero item (as returned by pyzotero) to the fields a
     caller needs to read, decide, and pass `version` back into a follow-up
@@ -264,6 +277,21 @@ class ZoteroService:
         summary["content_base64"] = base64.b64encode(raw).decode("ascii")
         return summary
 
+    def list_notes(self, item_key: str) -> list[dict]:
+        """List the notes filed under an item -- not its file
+        attachments (see list_attachments for those). Read-only. Each
+        result includes full note content and `version` to pass to
+        update_note."""
+        try:
+            children = self.zot.children(item_key)
+        except Exception as exc:
+            raise _translate(exc, key=item_key) from exc
+        return [
+            _note_summary(c)
+            for c in children
+            if c.get("data", {}).get("itemType") == "note"
+        ]
+
     # ---- create ------------------------------------------------------
 
     def create_item(
@@ -328,12 +356,22 @@ class ZoteroService:
         return self._patch(key, version, dict(fields))
 
     def _patch(self, key: str, version: int, data: dict[str, Any]) -> dict:
+        return _item_summary(self._apply_patch(key, version, data))
+
+    def _apply_patch(self, key: str, version: int, data: dict[str, Any]) -> dict:
+        """PATCHes `data` onto an existing item and returns the raw,
+        post-update item (as pyzotero's zot.item() would). Shared by
+        _patch (bibliographic-item callers) and update_note (which needs
+        _note_summary instead of _item_summary)."""
         payload = {"key": key, "version": version, **data}
         try:
             self.zot.update_item(payload)
         except Exception as exc:
             raise _translate(exc, key=key) from exc
-        return self.get_item(key)
+        try:
+            return self.zot.item(key)
+        except Exception as exc:
+            raise _translate(exc, key=key) from exc
 
     # ---- tags (key-preserving) -----------------------------------------
 
@@ -440,6 +478,49 @@ class ZoteroService:
         except Exception as exc:
             raise _translate(exc, key=created.get("key")) from exc
         return _attachment_summary(item)
+
+    # ---- notes (create) ---------------------------------------------------
+
+    def create_note(
+        self, parent_key: str, content: str, tags: list[str] | None = None
+    ) -> dict:
+        """Add a new note as a child of an existing item (e.g. a research
+        note attached to a journalArticle). Safe: creates a brand-new
+        note item with its own key; never touches the parent item's own
+        fields or version.
+
+        content: the note's body, as Zotero-flavored HTML (e.g.
+            "<p>Some observation.</p>") -- Zotero derives the note's
+            display title from the first line of this content.
+        """
+        try:
+            template = self.zot.item_template("note")
+        except Exception as exc:
+            raise _translate(exc) from exc
+        template["note"] = content
+        if tags is not None:
+            template["tags"] = [{"tag": t} for t in tags]
+        try:
+            result = self.zot.create_items([template], parentid=parent_key)
+        except Exception as exc:
+            raise _translate(exc, key=parent_key) from exc
+
+        failed = result.get("failed") or {}
+        if failed:
+            raise ValidationError(f"Zotero rejected the new note: {failed}")
+        success = result.get("successful") or result.get("success") or {}
+        created = next(iter(success.values()))
+        if isinstance(created, dict):
+            return _note_summary(created)
+        try:
+            return _note_summary(self.zot.item(created))
+        except Exception as exc:
+            raise _translate(exc, key=created) from exc
+
+    def update_note(self, key: str, version: int, content: str) -> dict:
+        """Edit a note's content, in place. Safe, key-preserving.
+        version: the note's current version (from list_notes)."""
+        return _note_summary(self._apply_patch(key, version, {"note": content}))
 
     # ---- destructive: delete --------------------------------------------
 

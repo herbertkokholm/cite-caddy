@@ -111,6 +111,25 @@ def test_attachment_and_fulltext_tools(fake_service):
     assert fulltext["content"] == "extracted text"
 
 
+def test_note_tools(fake_service):
+    parent = fake_service.seed_item("journalArticle", {"title": "Host"})
+
+    created = mcp_server.create_note(
+        parent["key"], "<p>First thought.</p>", tags=["todo"]
+    )
+    assert created["content"] == "<p>First thought.</p>"
+    assert created["parent_item"] == parent["key"]
+    assert created["tags"] == ["todo"]
+
+    listed = mcp_server.list_notes(parent["key"])
+    assert [n["key"] for n in listed] == [created["key"]]
+
+    updated = mcp_server.update_note(
+        created["key"], version=created["version"], content="<p>Revised.</p>"
+    )
+    assert updated["content"] == "<p>Revised.</p>"
+
+
 def test_list_collections_tool(fake_service):
     fake_service.seed_collection("Papers")
     result = mcp_server.list_collections()
