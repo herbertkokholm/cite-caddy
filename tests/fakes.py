@@ -27,6 +27,8 @@ class FakeZotero:
         self._collections: dict[str, dict[str, Any]] = {}
         self._files: dict[str, bytes] = {}
         self._fulltext: dict[str, dict[str, Any]] = {}
+        self._saved_searches: dict[str, dict[str, Any]] = {}
+        self._groups: list[dict[str, Any]] = []
         self._next_id = 1
 
     # ---- test setup helpers (not part of pyzotero's real interface) ----
@@ -66,6 +68,27 @@ class FakeZotero:
             },
         }
         self._collections[key] = full
+        return full
+
+    def seed_group(self, name: str, group_id: int | None = None, **extra: Any) -> dict:
+        gid = group_id if group_id is not None else self._next_id
+        if group_id is None:
+            self._next_id += 1
+        full = {
+            "id": gid,
+            "version": 1,
+            "data": {
+                "id": gid,
+                "version": 1,
+                "name": name,
+                "type": "Private",
+                "owner": 1,
+                "libraryEditing": "members",
+                "libraryReading": "members",
+                **extra,
+            },
+        }
+        self._groups.append(full)
         return full
 
     def seed_attachment(
@@ -410,3 +433,29 @@ class FakeZotero:
             self._collections[key] = full
             success[str(i)] = key
         return {"success": success, "unchanged": {}, "failed": {}}
+
+    def searches(self, **kwargs: Any) -> list[dict]:
+        return list(self._saved_searches.values())
+
+    def saved_search(self, name: str, conditions: list[dict[str, str]]) -> dict:
+        key = self._new_key()
+        full = {
+            "key": key,
+            "version": 1,
+            "data": {"key": key, "version": 1, "name": name, "conditions": conditions},
+        }
+        self._saved_searches[key] = full
+        return {
+            "success": {"0": key},
+            "successful": {"0": full},
+            "unchanged": {},
+            "failed": {},
+        }
+
+    def delete_saved_search(self, keys: list[str]) -> int:
+        for k in keys:
+            self._saved_searches.pop(k, None)
+        return 204
+
+    def groups(self, **kwargs: Any) -> list[dict]:
+        return list(self._groups)

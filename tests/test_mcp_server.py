@@ -74,6 +74,26 @@ def test_tag_tools(fake_service):
     assert updated["tags"] == ["only"]
 
 
+def test_saved_search_tools(fake_service):
+    conditions = [{"condition": "itemType", "operator": "is", "value": "book"}]
+    created = mcp_server.create_saved_search("Books", conditions)
+    assert created["name"] == "Books"
+
+    listed = mcp_server.list_saved_searches()
+    assert [s["key"] for s in listed] == [created["key"]]
+
+    result = mcp_server.delete_saved_search(created["key"])
+    assert result["deleted"] is True
+    assert mcp_server.list_saved_searches() == []
+
+
+def test_list_groups_tool(fake_service):
+    fake_service.seed_group("Lab Group", group_id=42)
+    result = mcp_server.list_groups()
+    assert result[0]["id"] == 42
+    assert result[0]["name"] == "Lab Group"
+
+
 def test_trash_tools(fake_service):
     item = fake_service.seed_item("book", {"title": "Doomed"})
 

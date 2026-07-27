@@ -91,12 +91,16 @@ access), so it can be revoked independently if it ever leaks.
 ## Tools
 
 Read-only: `search_items`, `get_item`, `list_collections`, `list_tags`,
-`list_trash`, `list_attachments`, `get_fulltext`, `download_attachment`,
-`list_notes`.
+`list_trash`, `list_saved_searches`, `list_groups`, `list_attachments`,
+`get_fulltext`, `download_attachment`, `list_notes`. `list_groups` lists
+the groups the configured API key's account belongs to; its `id` doubles
+as `target_library_id` (with `target_library_type="group"`) for
+`move_item_to_different_library`.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
-`update_collection`, `update_item`, `add_tags`/`remove_tags`/`set_tags`,
-`rename_tag`, `add_to_collection`/`remove_from_collection`, `trash_item`,
+`create_saved_search`, `update_collection`, `update_item`,
+`add_tags`/`remove_tags`/`set_tags`, `rename_tag`,
+`add_to_collection`/`remove_from_collection`, `trash_item`,
 `restore_from_trash`, `upload_attachment`, `create_note`, `update_note`.
 `trash_item` is a reversible soft delete (undo with `restore_from_trash`)
 -- unlike `delete_item_permanently` below, it doesn't break Word
@@ -104,16 +108,19 @@ citations unless the item is later permanently deleted or the trash is
 emptied.
 
 Destructive (see "Key safety" above): `delete_item_permanently`,
-`move_item_to_different_library`, `delete_collection`, `delete_tag`. The
-first three require the item's/collection's current Zotero `version` (get
-it from `search_items`/`get_item`/`list_collections` first) and refuse the
-call if it doesn't match the server's current version, rather than
-silently overwriting a concurrent change. `delete_collection` cascades to
-any sub-collections (matching Zotero's own "Delete Collection" behavior)
-but never deletes the items filed in them. `rename_tag`/`delete_tag` act
-on every item in the library carrying that tag, not just one -- there's no
+`move_item_to_different_library`, `delete_collection`, `delete_tag`,
+`delete_saved_search`. The first three require the item's/collection's
+current Zotero `version` (get it from
+`search_items`/`get_item`/`list_collections` first) and refuse the call if
+it doesn't match the server's current version, rather than silently
+overwriting a concurrent change. `delete_collection` cascades to any
+sub-collections (matching Zotero's own "Delete Collection" behavior) but
+never deletes the items filed in them. `rename_tag`/`delete_tag` act on
+every item in the library carrying that tag, not just one -- there's no
 per-tag version to check, since tags aren't standalone versioned entities
-in Zotero's API.
+in Zotero's API. `delete_saved_search` is destructive but low-risk: a
+saved search is just a stored filter, so deleting one never touches items
+or citations.
 
 Attachment file content (`upload_attachment`'s `content_base64` argument,
 `download_attachment`'s `content_base64` result) travels base64-encoded —

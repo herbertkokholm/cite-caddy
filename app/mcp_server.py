@@ -1,8 +1,8 @@
 """Remote MCP server exposing full read/write access to a Zotero library
 (search, add, tag, update, delete, move, attachments, full text, notes,
 collection rename/delete, library-wide tag rename/delete, trash view/
-move/restore) -- see README for the key safety note on delete/move
-breaking Word-plugin citations.
+move/restore, saved searches, groups) -- see README for the key safety
+note on delete/move breaking Word-plugin citations.
 
 Transport is chosen by environment: any host setting $PORT means "serve
 over streamable-http, bound to 0.0.0.0:$PORT"; without $PORT, this runs
@@ -78,14 +78,15 @@ _PORT = os.environ.get("PORT")
 _INSTRUCTIONS = (
     "Full read/write access to a Zotero library: search, add, tag, update, "
     "delete, and move items; create, rename/move, and delete collections; "
-    "list/rename/delete tags library-wide; list/download/upload item "
-    "attachments and read their extracted full text; list/add/edit item "
-    "notes. Mutating tools that touch an existing item or collection "
-    "require its current `version` (from "
-    "search_items/get_item/list_collections) and refuse the write if it's "
-    "stale -- re-fetch and retry in that case, don't just resend the same "
-    "version. delete_item_permanently and move_item_to_different_library "
-    "break any Word-document citation referencing the item's key; prefer "
+    "list/rename/delete tags library-wide; view/create/delete saved "
+    "searches; list groups; list/download/upload item attachments and "
+    "read their extracted full text; list/add/edit item notes. Mutating "
+    "tools that touch an existing item or collection require its current "
+    "`version` (from search_items/get_item/list_collections) and refuse "
+    "the write if it's stale -- re-fetch and retry in that case, don't "
+    "just resend the same version. delete_item_permanently and "
+    "move_item_to_different_library break any Word-document citation "
+    "referencing the item's key; prefer "
     "add_to_collection/remove_from_collection for in-library "
     "reorganization, which is safe. delete_collection cascades to any "
     "sub-collections but never deletes the items filed in them. "
@@ -93,7 +94,9 @@ _INSTRUCTIONS = (
     "tag, not just one -- use add_tags/remove_tags/set_tags for a single "
     "item's tags. trash_item is a reversible soft delete (undo with "
     "restore_from_trash); delete_item_permanently is not reversible -- "
-    "prefer trash_item when a delete might need to be undone. Attachment "
+    "prefer trash_item when a delete might need to be undone. "
+    "list_groups' results (`id`, with target_library_type=\"group\") are "
+    "for target_library_id on move_item_to_different_library. Attachment "
     "file content travels as base64 (upload_attachment's content_base64, "
     "download_attachment's content_base64 in the result) since this "
     "server runs remotely with no access to the caller's local "
@@ -293,6 +296,37 @@ def list_collections() -> list[dict]:
 
 @mcp.tool(
     annotations=ToolAnnotations(
+        title="List Zotero Saved Searches",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_saved_searches() -> list[dict]:
+    """List saved searches -- Zotero's own stored search definitions
+    (visible in the desktop app's left-hand pane), not ad-hoc calls to
+    search_items. Read-only. Each result's `key` can be passed to
+    delete_saved_search."""
+    return get_service().list_saved_searches()
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Groups",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_groups() -> list[dict]:
+    """List the Zotero groups the configured API key's user account
+    belongs to. Read-only. Each result's `id` can be passed as
+    target_library_id (with target_library_type="group") to
+    move_item_to_different_library, if the group you want isn't this
+    server's own configured library."""
+    return get_service().list_groups()
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
         title="List Zotero Tags",
         readOnlyHint=True,
         openWorldHint=True,
@@ -421,6 +455,28 @@ def create_item(
 def create_collection(name: str, parent_key: str | None = None) -> dict:
     """Create a new collection, optionally nested under parent_key. Safe."""
     return get_service().create_collection(name, parent_key=parent_key)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Create Zotero Saved Search",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
+def create_saved_search(name: str, conditions: list[dict[str, str]]) -> dict:
+    """Create a new saved search. Safe: creates a brand-new key, never
+    touches an existing one.
+
+    conditions: a list of dicts, each with exactly the keys "condition",
+    "operator", "value", e.g. [{"condition": "itemType", "operator": "is",
+    "value": "journalArticle"}]. Which condition/operator combinations are
+    valid is Zotero-defined and fairly extensive; an invalid combination
+    raises an error naming the problem.
+    """
+    return get_service().create_saved_search(name, conditions)
 
 
 @mcp.tool(
@@ -766,6 +822,23 @@ def delete_collection(key: str, version: int) -> dict:
     version.
     """
     return get_service().delete_collection(key, version)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Delete Zotero Saved Search",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def delete_saved_search(key: str) -> dict:
+    """DESTRUCTIVE, but low-risk -- permanently deletes this saved search
+    definition. Unlike delete_item_permanently/delete_collection, this
+    doesn't touch any items or their citations -- a saved search is just
+    a stored filter, not a container."""
+    return get_service().delete_saved_search(key)
 
 
 @mcp.tool(

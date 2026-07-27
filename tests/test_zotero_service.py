@@ -44,6 +44,51 @@ def test_list_collections(service, fake_zot):
     assert result[0]["name"] == "Papers"
 
 
+# ---- saved searches --------------------------------------------------------
+
+
+def test_create_and_list_saved_search(service):
+    conditions = [{"condition": "itemType", "operator": "is", "value": "book"}]
+    created = service.create_saved_search("Books", conditions)
+
+    assert created["name"] == "Books"
+    assert created["conditions"] == conditions
+
+    listed = service.list_saved_searches()
+    assert [s["key"] for s in listed] == [created["key"]]
+
+
+def test_delete_saved_search(service):
+    created = service.create_saved_search(
+        "Doomed", [{"condition": "itemType", "operator": "is", "value": "book"}]
+    )
+
+    result = service.delete_saved_search(created["key"])
+
+    assert result == {"key": created["key"], "deleted": True}
+    assert service.list_saved_searches() == []
+
+
+# ---- groups ----------------------------------------------------------------
+
+
+def test_list_groups(service, fake_zot):
+    fake_zot.seed_group("Lab Group", group_id=555, type="Private")
+
+    result = service.list_groups()
+
+    assert result == [
+        {
+            "id": 555,
+            "name": "Lab Group",
+            "type": "Private",
+            "owner": 1,
+            "library_editing": "members",
+            "library_reading": "members",
+        }
+    ]
+
+
 # ---- trash ---------------------------------------------------------------
 
 

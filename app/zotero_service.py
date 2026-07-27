@@ -161,6 +161,32 @@ def _collection_summary(collection: dict) -> dict:
     }
 
 
+def _saved_search_summary(search: dict) -> dict:
+    data = search.get("data", search)
+    return {
+        "key": data.get("key") or search.get("key"),
+        "version": data.get("version", search.get("version")),
+        "name": data.get("name", ""),
+        "conditions": data.get("conditions", []),
+    }
+
+
+def _group_summary(group: dict) -> dict:
+    """Reduces a raw Zotero group (as returned by pyzotero's groups()) to
+    the fields a caller needs to target it as a library -- `id` doubles
+    as target_library_id for move_item_to_different_library/create_item
+    calls against this group (with target_library_type="group")."""
+    data = group.get("data", group)
+    return {
+        "id": data.get("id") or group.get("id"),
+        "name": data.get("name", ""),
+        "type": data.get("type", ""),
+        "owner": data.get("owner"),
+        "library_editing": data.get("libraryEditing", ""),
+        "library_reading": data.get("libraryReading", ""),
+    }
+
+
 def _note_summary(item: dict) -> dict:
     """Reduces a raw Zotero note item to the fields a caller needs to
     read its content and write it back via update_note."""
@@ -257,6 +283,29 @@ class ZoteroService:
         except Exception as exc:
             raise _translate(exc) from exc
         return [_collection_summary(c) for c in raw]
+
+    def list_saved_searches(self) -> list[dict]:
+        """List saved searches -- Zotero's own stored search definitions
+        (visible in the desktop app's left-hand pane), not ad-hoc calls to
+        search_items. Read-only. Each result's `key` can be passed to
+        delete_saved_search."""
+        try:
+            raw = self.zot.searches()
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [_saved_search_summary(s) for s in raw]
+
+    def list_groups(self) -> list[dict]:
+        """List the Zotero groups the configured API key's user account
+        belongs to. Read-only. Each result's `id` can be passed as
+        target_library_id (with target_library_type="group") to
+        move_item_to_different_library, if the group you want isn't this
+        server's own configured library."""
+        try:
+            raw = self.zot.groups()
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [_group_summary(g) for g in raw]
 
     # ---- attachments & fulltext (read) ----------------------------------
 
@@ -546,6 +595,30 @@ class ZoteroService:
             "parent_collection": parent_key or None,
         }
 
+    def create_saved_search(self, name: str, conditions: list[dict[str, str]]) -> dict:
+        """Create a new saved search. Safe: creates a brand-new key, never
+        touches an existing one.
+
+        conditions: a list of dicts, each with exactly the keys
+        "condition", "operator", "value", e.g. [{"condition": "itemType",
+        "operator": "is", "value": "journalArticle"}]. Which
+        condition/operator combinations are valid is Zotero-defined and
+        fairly extensive (see Zotero's search-conditions reference); an
+        invalid combination raises an error naming the problem.
+        """
+        try:
+            result = self.zot.saved_search(name, conditions)
+        except Exception as exc:
+            raise _translate(exc) from exc
+        failed = result.get("failed") or {}
+        if failed:
+            raise ValidationError(f"Zotero rejected the new saved search: {failed}")
+        success = result.get("successful") or result.get("success") or {}
+        created = next(iter(success.values()))
+        if isinstance(created, dict):
+            return _saved_search_summary(created)
+        return {"key": created, "name": name, "conditions": conditions}
+
     def update_collection(
         self,
         key: str,
@@ -746,6 +819,18 @@ class ZoteroService:
             raise _translate(
                 exc, key=key, not_found_cls=CollectionNotFoundError, noun="collection"
             ) from exc
+        return {"key": key, "deleted": True}
+
+    def delete_saved_search(self, key: str) -> dict:
+        """DESTRUCTIVE, but low-risk. Permanently deletes this saved
+        search definition. Unlike delete_item/delete_collection, this
+        doesn't touch any items or their citations -- a saved search is
+        just a stored filter, not a container.
+        """
+        try:
+            self.zot.delete_saved_search([key])
+        except Exception as exc:
+            raise _translate(exc, key=key) from exc
         return {"key": key, "deleted": True}
 
     # ---- destructive: cross-library move --------------------------------
