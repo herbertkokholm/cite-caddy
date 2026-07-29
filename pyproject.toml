@@ -1,6 +1,6 @@
 [project]
 name = "zotero-mcp"
-version = "1.0.1"
+version = "1.1.0"
 description = "Remote MCP server for full read/write access to a Zotero library"
 readme = "README.md"
 license = "MIT"

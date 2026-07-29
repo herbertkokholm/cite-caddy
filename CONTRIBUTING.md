@@ -9,13 +9,19 @@ touching anything that deletes or moves an item.
 
 All Python source lives under `app/` (a single package):
 
-- `app/config.py` — env-var settings (Zotero credentials, OAuth login
-  credentials, public URL).
+- `app/config.py` — env-var settings: `Settings` (stdio-mode Zotero
+  credentials) and `HttpSettings` (HTTP-mode server config: public URL,
+  data dir, the token-store encryption key). HTTP mode has no
+  server-wide Zotero credentials of its own -- each tenant supplies
+  their own at login instead (see below).
 - `app/zotero_service.py` — all Zotero read/write logic, wrapped around
   `pyzotero`. No `mcp` dependency, so it's testable on its own.
 - `app/oauth_store.py` / `app/oauth_provider.py` — this server's own OAuth
   2.1 authorization server (see `app/oauth_provider.py`'s module
-  docstring for why it exists instead of a simpler auth scheme).
+  docstring for why it exists instead of a simpler auth scheme), plus
+  self-service multi-tenant onboarding: `complete_login` validates a
+  submitted Zotero API key live and persists it as a tenant, keyed by
+  `library_id` and encrypted at rest.
 - `app/mcp_server.py` — wires the above into FastMCP tools.
 
 `tests/` mirrors this 1:1, plus `tests/fakes.py`'s in-memory fake Zotero
