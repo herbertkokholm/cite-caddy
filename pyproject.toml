@@ -7,7 +7,7 @@ license = "MIT"
 requires-python = ">=3.10"
 keywords = ["mcp", "mcp-server", "model-context-protocol", "zotero", "claude", "oauth2"]
 dependencies = [
-    "mcp",
+    "mcp>=1.0,<2",
     "pyzotero",
     "cryptography",
 ]

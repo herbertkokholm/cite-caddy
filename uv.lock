@@ -1223,7 +1223,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography" },
-    { name = "mcp" },
+    { name = "mcp", specifier = ">=1.0,<2" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pyzotero" },
