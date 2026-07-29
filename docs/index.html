@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zotero-mcp</title>
   <meta name="description"
-    content="A standalone, remote MCP server giving full read/write access to a Zotero library — 36 tools covering items, collections, tags, trash, saved searches, and schema lookups, gated by a first-party OAuth 2.1 flow.">
+    content="A standalone, remote MCP server giving full read/write access to a Zotero library — 36 tools covering items, collections, tags, trash, saved searches, and schema lookups. Self-service, multi-tenant: connect with your own Zotero API key, gated by a first-party OAuth 2.1 flow.">
   <style>
     :root,
     :root[data-theme="dark"] {
@@ -495,10 +495,11 @@
     <h2>Full read/write access to your Zotero library —<br>for your own Claude, over MCP.</h2>
     <p>A standalone, remote MCP server that turns Zotero into something your AI
       client can act on directly: search, create, tag, update — even delete and
-      move, with real safeguards. v1.0 covers the full library surface — items,
+      move, with real safeguards. Covers the full library surface — items,
       collections, tags, trash, saved searches, and schema lookups — in 36 tools.
-      Nothing to install locally, gated by a first-party OAuth 2.1 flow built into
-      the server itself.</p>
+      Self-service and multi-tenant: sign in with your own Zotero Library ID and
+      API key, no admin approval, no shared credentials. Nothing to install
+      locally, gated by a first-party OAuth 2.1 flow built into the server itself.</p>
     <div class="cta">
       <a class="btn primary" href="#mcp">Connect via MCP</a>
       <a class="btn ghost" href="#safety">Key safety model</a>
@@ -510,19 +511,22 @@
 
     <section>
       <h3>How it works</h3>
-      <h4>One login, then tool calls go straight through to Zotero</h4>
-      <p class="lead">There's exactly one resource owner, so <code>/authorize</code>
-        doesn't delegate to a third-party identity provider — it's a first-party
-        login form checked against a username/password configured on the server.</p>
+      <h4>Sign in with your own Zotero key — that's the whole sign-up</h4>
+      <p class="lead">This server is multi-tenant and self-service, so
+        <code>/authorize</code> doesn't delegate to a third-party identity
+        provider — it's a first-party login form asking for your own Zotero
+        Library ID, Library Type, and API Key. Validating that key against the
+        live Zotero API is what gates access <em>and</em> onboards your library,
+        in one step.</p>
       <div class="flow">
         <div class="step"><b>1. Add custom connector</b><span>The MCP client points at the server's public URL and
             self-registers via dynamic client registration (RFC 7591) — no manual app setup.</span></div>
         <div class="arrow">→</div>
-        <div class="step"><b>2. First-party login</b><span>The authorization screen is this app's own login form, not a
-            third-party IdP. Logging in is what actually gates access.</span></div>
+        <div class="step"><b>2. Bring your own key</b><span>The authorization screen asks for your Zotero Library
+            ID/Type/API Key — no admin sign-up, no shared credentials.</span></div>
         <div class="arrow">→</div>
-        <div class="step"><b>3. Tool calls → Zotero</b><span>Authenticated calls proxy straight to the Zotero Web API
-            using a write-scoped key configured server-side.</span></div>
+        <div class="step"><b>3. Tool calls → your library</b><span>Authenticated calls are routed to your own Zotero
+            library, keyed off your access token — never a shared one.</span></div>
       </div>
 
       <div class="mock">
@@ -551,7 +555,8 @@
       <h3>MCP access</h3>
       <h4>Point your own Claude at the server</h4>
       <p class="lead">Add it as a remote MCP connector directly — the OAuth flow
-        prompts for username/password in-browser, nothing to configure by hand.</p>
+        prompts for your own Zotero Library ID/Type/API Key in-browser, nothing
+        to configure by hand, no admin sign-up step.</p>
 
       <div class="mcp-panel">
         <h5>Claude Desktop</h5>
@@ -609,8 +614,12 @@
             completing the login form is what actually gates access.</span></div>
         <div class="feat"><b>Remote by default</b><span>Ships as its own Docker container behind a reverse proxy —
             nothing to install or run locally.</span></div>
-        <div class="feat"><b>Library is a setting</b><span><code>ZOTERO_LIBRARY_ID</code>/<code>TYPE</code>/<code>API_KEY</code>
-            configure which library it talks to — never hardcoded.</span></div>
+        <div class="feat"><b>Self-service, multi-tenant</b><span>Bring your own Zotero Library ID/Type/API Key — the
+            first successful login <em>is</em> sign-up, no admin approval step.</span></div>
+        <div class="feat"><b>Per-tenant isolation</b><span>Each caller's tool calls are routed to their own onboarded
+            library, keyed off their access token — never a shared one.</span></div>
+        <div class="feat"><b>Encrypted at rest</b><span>Onboarded tenants' Zotero API keys are encrypted (Fernet) in
+            the token store, not kept in plaintext.</span></div>
         <div class="feat"><b>Tested against a fake</b><span>All read/write logic runs against an in-memory
             <code>FakeZotero</code> in tests — the suite never touches a live library.</span></div>
       </div>

@@ -19,6 +19,7 @@ import secrets
 import sys
 
 import pytest
+from cryptography.fernet import Fernet
 from starlette.testclient import TestClient
 
 
@@ -29,18 +30,39 @@ def _code_verifier_and_challenge() -> tuple[str, str]:
     return verifier, challenge
 
 
+class _FakeZotero:
+    """Stands in for pyzotero.zotero.Zotero for these HTTP-level tests --
+    key_info() succeeds for "valid-key" and raises for anything else, so
+    /login's live Zotero credential check can be exercised without a real
+    network call. See app/oauth_provider.py's complete_login."""
+
+    def __init__(self, library_id, library_type, api_key) -> None:
+        self.library_id = library_id
+        self.library_type = library_type
+        self.api_key = api_key
+
+    def key_info(self):
+        if self.api_key != "valid-key":
+            raise RuntimeError("invalid key")
+        return {"userID": 1, "access": {}}
+
+
 @pytest.fixture
 def http_mcp_server(tmp_path, monkeypatch):
     monkeypatch.setenv("PORT", "8199")
-    monkeypatch.setenv("ZOTERO_LIBRARY_ID", "123")
-    monkeypatch.setenv("ZOTERO_API_KEY", "fake-key")
-    monkeypatch.setenv("MCP_AUTH_USERNAME", "thomas")
-    monkeypatch.setenv("MCP_AUTH_PASSWORD", "s3cret")
+    monkeypatch.delenv("ZOTERO_LIBRARY_ID", raising=False)
+    monkeypatch.delenv("ZOTERO_API_KEY", raising=False)
+    monkeypatch.setenv("MCP_TOKEN_STORE_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test")
     monkeypatch.setenv("MCP_DATA_DIR", str(tmp_path))
 
     sys.modules.pop("app.mcp_server", None)
     module = importlib.import_module("app.mcp_server")
+
+    import app.oauth_provider as oauth_provider_mod
+
+    monkeypatch.setattr(oauth_provider_mod.zotero, "Zotero", _FakeZotero)
+
     yield module
     sys.modules.pop("app.mcp_server", None)
 
@@ -130,7 +152,7 @@ def test_authorize_without_prior_registration_still_works(client):
     assert resp.headers["location"].startswith("/login?login_id=")
 
 
-def test_login_wrong_password_shows_error(client):
+def test_login_invalid_zotero_key_shows_error(client):
     client_info = _register_client(client)
     _, challenge = _code_verifier_and_challenge()
     authorize_resp = client.get(
@@ -148,10 +170,15 @@ def test_login_wrong_password_shows_error(client):
 
     resp = client.post(
         "/login",
-        data={"login_id": login_id, "username": "thomas", "password": "wrong"},
+        data={
+            "login_id": login_id,
+            "library_id": "123",
+            "library_type": "user",
+            "api_key": "wrong-key",
+        },
     )
     assert resp.status_code == 401
-    assert "Incorrect" in resp.text
+    assert "Could not verify" in resp.text
 
 
 def test_full_oauth_flow_yields_working_bearer_token(client):
@@ -174,7 +201,12 @@ def test_full_oauth_flow_yields_working_bearer_token(client):
 
     login_resp = client.post(
         "/login",
-        data={"login_id": login_id, "username": "thomas", "password": "s3cret"},
+        data={
+            "login_id": login_id,
+            "library_id": "123",
+            "library_type": "user",
+            "api_key": "valid-key",
+        },
         follow_redirects=False,
     )
     assert login_resp.status_code == 302
