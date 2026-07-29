@@ -26,20 +26,23 @@ Claude Desktop/claude.ai's "Add custom connector" UI is OAuth-first, and
 treats any 401 (which is what Basic Auth in front of the server would
 produce) as "this server requires OAuth", then fails when it discovers
 there's no real OAuth server behind it. Implementing the real thing is
-what makes "Add custom connector" work at all. This server has exactly one
-resource owner, so /authorize doesn't delegate to a third party --
-completing a first-party login form (see /login below) against
-MCP_AUTH_USERNAME/MCP_AUTH_PASSWORD is what gates access; see
-app/oauth_provider.py's module docstring for the full flow.
+what makes "Add custom connector" work at all. This server is
+multi-tenant and self-service: /authorize doesn't delegate to a third
+party -- completing a first-party login form (see /login below) with the
+caller's own Zotero Library ID/Type/API Key is what gates access AND
+onboards that library as a tenant, in one step; see
+app/oauth_provider.py's module docstring for the full flow. Each
+authenticated caller's tool calls are routed to their own Zotero library
+via get_service() below, keyed off the bearer token's `subject` (the
+tenant's library_id).
 
 Env vars (see README's "Configuration" section):
-    ZOTERO_LIBRARY_ID      numeric library ID (user or group)
-    ZOTERO_LIBRARY_TYPE    "user" or "group" (default: user)
-    ZOTERO_API_KEY         needs write permission for this project
-    MCP_AUTH_USERNAME      login-form username (HTTP mode only)
-    MCP_AUTH_PASSWORD      login-form password (HTTP mode only)
+    ZOTERO_LIBRARY_ID      numeric library ID (user or group) -- stdio mode only
+    ZOTERO_LIBRARY_TYPE    "user" or "group" (default: user) -- stdio mode only
+    ZOTERO_API_KEY         needs write permission -- stdio mode only
+    MCP_TOKEN_STORE_KEY    Fernet key encrypting tenants' API keys at rest (HTTP mode only)
     MCP_PUBLIC_URL         public HTTPS URL, e.g. https://your-domain.example
-    MCP_DATA_DIR           where OAuth clients/tokens persist (default: ./.data)
+    MCP_DATA_DIR           where OAuth clients/tokens/tenants persist (default: ./.data)
 """
 
 from __future__ import annotations
@@ -48,6 +51,7 @@ import html
 import os
 from typing import Any
 
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import (
     AuthSettings,
     ClientRegistrationOptions,
@@ -63,8 +67,7 @@ from starlette.responses import (
     Response,
 )
 
-from app.config import AuthSettings as OwnerCredentials
-from app.config import Settings, load_dotenv
+from app.config import HttpSettings, Settings, load_dotenv
 from app.oauth_provider import (
     InvalidCredentialsError,
     LoginSessionExpiredError,
@@ -111,14 +114,15 @@ _INSTRUCTIONS = (
 )
 
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
+_token_store: TokenStore | None = None
 
 if _PORT:
-    _owner = OwnerCredentials.from_env()
-    _oauth_provider = ZoteroMCPOAuthProvider(
-        store=TokenStore(os.path.join(_owner.data_dir, "oauth_store.json")),
-        username=_owner.username,
-        password=_owner.password,
+    _http_settings = HttpSettings.from_env()
+    _token_store = TokenStore(
+        os.path.join(_http_settings.data_dir, "oauth_store.json"),
+        fernet_key=_http_settings.token_store_key,
     )
+    _oauth_provider = ZoteroMCPOAuthProvider(store=_token_store)
     mcp = FastMCP(
         "zotero-mcp",
         instructions=_INSTRUCTIONS,
@@ -127,8 +131,8 @@ if _PORT:
         stateless_http=True,
         auth_server_provider=_oauth_provider,
         auth=AuthSettings(
-            issuer_url=_owner.public_url,
-            resource_server_url=f"{_owner.public_url}/mcp",
+            issuer_url=_http_settings.public_url,
+            resource_server_url=f"{_http_settings.public_url}/mcp",
             client_registration_options=ClientRegistrationOptions(enabled=True),
             revocation_options=RevocationOptions(enabled=True),
         ),
@@ -143,23 +147,46 @@ if _PORT:
     async def healthz(request: Request) -> PlainTextResponse:
         return PlainTextResponse("OK")
 
-    def _login_page(login_id: str, error: str | None = None) -> str:
+    def _login_page(
+        login_id: str,
+        error: str | None = None,
+        library_id: str = "",
+        library_type: str = "user",
+    ) -> str:
         error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
+        selected = {
+            t: " selected" if t == library_type else "" for t in ("user", "group")
+        }
         return f"""<!doctype html>
 <title>zotero-mcp login</title>
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 24rem; margin: 4rem auto; }}
-  input {{ display: block; width: 100%; margin: 0.5rem 0 1rem; padding: 0.5rem; box-sizing: border-box; }}
+  input, select {{ display: block; width: 100%; margin: 0.5rem 0 1rem; padding: 0.5rem; box-sizing: border-box; }}
   button {{ padding: 0.5rem 1.5rem; }}
   .error {{ color: #b00020; }}
+  .hint {{ color: #666; font-size: 0.9em; }}
 </style>
 <h1>zotero-mcp</h1>
-<p>Sign in to allow this MCP client access to your Zotero library.</p>
+<p>Connect this MCP client to your own Zotero library. Signing in with a
+valid Zotero API key both grants access and registers your library with
+this server -- no separate sign-up.</p>
 {error_html}
 <form method="post" action="/login">
   <input type="hidden" name="login_id" value="{html.escape(login_id)}">
-  <label>Username<input type="text" name="username" autofocus required></label>
-  <label>Password<input type="password" name="password" required></label>
+  <label>Zotero Library ID
+    <input type="text" name="library_id" value="{html.escape(library_id)}" autofocus required>
+  </label>
+  <label>Library Type
+    <select name="library_type">
+      <option value="user"{selected["user"]}>User</option>
+      <option value="group"{selected["group"]}>Group</option>
+    </select>
+  </label>
+  <label>API Key
+    <input type="password" name="api_key" required>
+  </label>
+  <p class="hint">Find these at Zotero -> Settings -> Security -> Applications
+  (the key needs write permission for this project).</p>
   <button type="submit">Sign in</button>
 </form>
 """
@@ -178,30 +205,72 @@ if _PORT:
     async def login_submit(request: Request) -> Response:
         form = await request.form()
         login_id = str(form.get("login_id", ""))
-        username = str(form.get("username", ""))
-        password = str(form.get("password", ""))
+        library_id = str(form.get("library_id", ""))
+        library_type = str(form.get("library_type", "user"))
+        api_key = str(form.get("api_key", ""))
         assert _oauth_provider is not None
         try:
             redirect_url = await _oauth_provider.complete_login(
-                login_id, username, password
+                login_id, library_id, library_type, api_key
             )
         except LoginSessionExpiredError as e:
             return HTMLResponse(f"<p>{html.escape(str(e))}</p>", status_code=400)
         except InvalidCredentialsError as e:
-            return HTMLResponse(_login_page(login_id, error=str(e)), status_code=401)
+            return HTMLResponse(
+                _login_page(
+                    login_id,
+                    error=str(e),
+                    library_id=library_id,
+                    library_type=library_type,
+                ),
+                status_code=401,
+            )
         return RedirectResponse(url=redirect_url, status_code=302)
 
 
 _service: ZoteroService | None = None
+_services: dict[str, ZoteroService] = {}
 
 
 def get_service() -> ZoteroService:
-    """Lazily builds (and caches) the ZoteroService singleton from env vars.
+    """Returns the ZoteroService for the current request.
 
-    Deferred past import time so importing this module -- e.g. from tests
-    -- doesn't require ZOTERO_* env vars to be set; tests instead call
-    configure_service() with a fake-backed ZoteroService.
+    HTTP mode ($PORT set): per-tenant. Looks up the current request's
+    bearer AccessToken (set by the SDK's auth middleware, via
+    get_access_token()), reads its `subject` (the tenant's library_id --
+    see app/oauth_provider.py's _issue_tokens), and builds/caches a
+    ZoteroService for that tenant from app/oauth_store.py's TokenStore
+    "tenants" collection. Rebuilds the cached entry if the stored api_key
+    no longer matches (e.g. the tenant re-logged in with a rotated key).
+
+    stdio mode (no $PORT): unchanged -- a single process-wide instance
+    built from env vars, deferred past import time so importing this
+    module (e.g. from tests) doesn't require ZOTERO_* env vars to be set;
+    tests instead call configure_service() with a fake-backed
+    ZoteroService.
     """
+    if _PORT:
+        token = get_access_token()
+        if token is None or token.subject is None:
+            raise RuntimeError("No authenticated Zotero tenant for this request.")
+        assert _token_store is not None
+        tenant = _token_store.get_tenant(token.subject)
+        if tenant is None:
+            raise RuntimeError(
+                f"No stored Zotero credentials for tenant {token.subject!r}."
+            )
+        cached = _services.get(token.subject)
+        if cached is None or cached.api_key != tenant["api_key"]:
+            cached = ZoteroService.from_settings(
+                Settings(
+                    library_id=tenant["library_id"],
+                    library_type=tenant["library_type"],
+                    api_key=tenant["api_key"],
+                )
+            )
+            _services[token.subject] = cached
+        return cached
+
     global _service
     if _service is None:
         _service = ZoteroService.from_settings(Settings.from_env())
@@ -209,8 +278,8 @@ def get_service() -> ZoteroService:
 
 
 def configure_service(service: ZoteroService) -> None:
-    """Overrides the cached service -- used by tests to inject one backed
-    by a fake Zotero client instead of a real pyzotero client."""
+    """Overrides the cached stdio-mode service -- used by tests to inject
+    one backed by a fake Zotero client instead of a real pyzotero client."""
     global _service
     _service = service
 
@@ -943,7 +1012,8 @@ def move_item_to_different_library(
 
 
 def main() -> None:
-    Settings.from_env()  # fail fast at startup, not on first tool call
+    if not _PORT:
+        Settings.from_env()  # stdio mode: fail fast at startup, not on first tool call
     mcp.run(transport="streamable-http" if _PORT else "stdio")
 
 

@@ -9,21 +9,27 @@ server needs OAuth", failing with a 404 when it then hits a nonexistent
 /authorize endpoint. Implementing the real thing is what makes "Add
 custom connector" work.
 
-This server has exactly one resource owner (whoever controls the Zotero
-library), so "authorize" doesn't delegate to a third-party identity
+This server is multi-tenant self-service: anyone can bring their own
+Zotero library. "authorize" doesn't delegate to a third-party identity
 provider -- it's a small first-party login form (see the /login routes in
-app/mcp_server.py) checked against MCP_AUTH_USERNAME/MCP_AUTH_PASSWORD.
-Any MCP client can dynamically register itself (RFC 7591, POST /register)
-and request authorization, but completing the login form is what actually
-gates access -- that's the "username and password" the deployment asks
-for, just carried over MCP's real auth flow. A proxy-level Basic Auth
-gate in front of the whole server would instead block /register, /token,
-and the OAuth discovery endpoints themselves, which must be reachable
-without pre-authentication for the flow to work at all.
+app/mcp_server.py) asking for a Zotero Library ID, Library Type, and API
+Key. Completing that form IS onboarding: the first successful validation
+of the API key (see complete_login below) both gates access and persists
+the tenant's credentials (app/oauth_store.py's TokenStore "tenants"
+collection) for that library_id, no separate signup step. Any MCP client
+can dynamically register itself (RFC 7591, POST /register) and request
+authorization, but completing the login form is what actually gates
+access. A proxy-level Basic Auth gate in front of the whole server would
+instead block /register, /token, and the OAuth discovery endpoints
+themselves, which must be reachable without pre-authentication for the
+flow to work at all.
 
 Access tokens are opaque random strings (not JWTs) looked up in
 app/oauth_store.py's TokenStore -- fine for a single-server deployment with
-no need to verify tokens anywhere else.
+no need to verify tokens anywhere else. Each issued AccessToken/
+RefreshToken carries `subject=library_id` (see _issue_tokens), so
+app/mcp_server.py's get_service() can look up which tenant's Zotero
+credentials to use for a given bearer token.
 """
 
 from __future__ import annotations
@@ -44,6 +50,7 @@ from mcp.shared.auth import (
     OAuthClientInformationFull,
     OAuthToken,
 )
+from pyzotero import zotero
 
 from app.oauth_store import TokenStore
 
@@ -62,11 +69,11 @@ class _FlexibleClientInformation(OAuthClientInformationFull):
     only lenient when redirect_uris is unset (i.e. for clients
     auto-provisioned by get_client below); a client that DID register
     through /register keeps normal strict validation against the
-    redirect_uris it registered. The trade-off is deliberate: this server
-    has exactly one resource owner, and the actual access gate is the
-    /login form (MCP_AUTH_USERNAME/MCP_AUTH_PASSWORD) -- not client_id or
-    redirect_uri matching, which matters far more for a multi-tenant
-    OAuth server than a single-owner one.
+    redirect_uris it registered. The trade-off is deliberate: the actual
+    access gate is the /login form's live Zotero credential check (see
+    complete_login below), not client_id or redirect_uri matching -- each
+    tenant's own Zotero API key is what protects their library, regardless
+    of which client_id requested the authorization.
     """
 
     def validate_redirect_uri(self, redirect_uri):
@@ -97,10 +104,8 @@ class LoginSessionExpiredError(Exception):
 
 
 class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
-    def __init__(self, store: TokenStore, username: str, password: str) -> None:
+    def __init__(self, store: TokenStore) -> None:
         self._store = store
-        self._username = username
-        self._password = password
         self._pending: dict[str, PendingAuthorization] = {}
 
     # ---- dynamic client registration ----------------------------------
@@ -141,17 +146,44 @@ class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
             )
         return pending
 
-    async def complete_login(self, login_id: str, username: str, password: str) -> str:
-        """Called by the /login POST handler. Verifies credentials and
+    async def complete_login(
+        self, login_id: str, library_id: str, library_type: str, api_key: str
+    ) -> str:
+        """Called by the /login POST handler. Validates the submitted
+        Zotero credentials by actually calling the Zotero API with them,
+        persists them as a tenant (upsert -- a returning user re-entering
+        the same or a rotated key just overwrites the stored one), and
         returns the URL to redirect the browser to (back to the MCP
-        client's redirect_uri, with a fresh authorization code), or raises
-        InvalidCredentialsError/LoginSessionExpiredError."""
+        client's redirect_uri, with a fresh authorization code). Raises
+        InvalidCredentialsError/LoginSessionExpiredError on failure.
+
+        This is the entire onboarding flow: there's no separate signup
+        step, no admin approval -- a Zotero API key that Zotero itself
+        accepts is sufficient to self-serve onto this server.
+        """
         pending = self.get_pending(login_id)
-        if not (
-            secrets.compare_digest(username, self._username)
-            and secrets.compare_digest(password, self._password)
-        ):
-            raise InvalidCredentialsError("Incorrect username or password.")
+        library_id = library_id.strip()
+
+        if library_type not in ("user", "group"):
+            raise InvalidCredentialsError('Library Type must be "user" or "group".')
+
+        try:
+            zot = zotero.Zotero(library_id, library_type, api_key)
+            zot.key_info()
+        except Exception as exc:
+            raise InvalidCredentialsError(
+                "Could not verify that Zotero Library ID/API Key -- check "
+                "them and try again."
+            ) from exc
+
+        self._store.put_tenant(
+            library_id,
+            {
+                "library_id": library_id,
+                "library_type": library_type,
+                "api_key": api_key,
+            },
+        )
 
         del self._pending[login_id]
         code = secrets.token_urlsafe(32)
@@ -164,6 +196,7 @@ class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
             redirect_uri=pending.params.redirect_uri,
             redirect_uri_provided_explicitly=pending.params.redirect_uri_provided_explicitly,
             resource=pending.params.resource,
+            subject=library_id,
         )
         self._store.put("auth_codes", code, auth_code.model_dump(mode="json"))
 
@@ -185,7 +218,9 @@ class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> OAuthToken:
         self._store.delete("auth_codes", authorization_code.code)
-        return self._issue_tokens(client.client_id, authorization_code.scopes)
+        return self._issue_tokens(
+            client.client_id, authorization_code.scopes, authorization_code.subject
+        )
 
     # ---- refresh tokens --------------------------------------------------
 
@@ -202,9 +237,13 @@ class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
         scopes: list[str],
     ) -> OAuthToken:
         self._store.delete("refresh_tokens", refresh_token.token)
-        return self._issue_tokens(client.client_id, scopes or refresh_token.scopes)
+        return self._issue_tokens(
+            client.client_id, scopes or refresh_token.scopes, refresh_token.subject
+        )
 
-    def _issue_tokens(self, client_id: str, scopes: list[str]) -> OAuthToken:
+    def _issue_tokens(
+        self, client_id: str, scopes: list[str], subject: str | None
+    ) -> OAuthToken:
         access_token = secrets.token_urlsafe(32)
         refresh_token = secrets.token_urlsafe(32)
         expires_at = int(time.time()) + ACCESS_TOKEN_TTL_SECONDS
@@ -217,13 +256,18 @@ class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
                 client_id=client_id,
                 scopes=scopes,
                 expires_at=expires_at,
+                subject=subject,
             ).model_dump(mode="json"),
         )
         self._store.put(
             "refresh_tokens",
             refresh_token,
             RefreshToken(
-                token=refresh_token, client_id=client_id, scopes=scopes, expires_at=None
+                token=refresh_token,
+                client_id=client_id,
+                scopes=scopes,
+                expires_at=None,
+                subject=subject,
             ).model_dump(mode="json"),
         )
         return OAuthToken(

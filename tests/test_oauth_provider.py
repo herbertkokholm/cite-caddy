@@ -2,9 +2,11 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from cryptography.fernet import Fernet
 from mcp.server.auth.provider import AccessToken, AuthorizationParams, RefreshToken
 from mcp.shared.auth import InvalidRedirectUriError, OAuthClientInformationFull
 
+import app.oauth_provider as oauth_provider_mod
 from app.oauth_provider import (
     InvalidCredentialsError,
     LoginSessionExpiredError,
@@ -13,10 +15,33 @@ from app.oauth_provider import (
 from app.oauth_store import TokenStore
 
 
+class _FakeZotero:
+    """Stands in for pyzotero.zotero.Zotero: key_info() succeeds for
+    "valid-key" and raises for anything else, mirroring how a real
+    invalid/revoked Zotero API key would fail the /keys/{api_key} call."""
+
+    def __init__(self, library_id, library_type, api_key) -> None:
+        self.library_id = library_id
+        self.library_type = library_type
+        self.api_key = api_key
+
+    def key_info(self):
+        if self.api_key != "valid-key":
+            raise RuntimeError("invalid key")
+        return {"userID": 1, "access": {}}
+
+
+@pytest.fixture(autouse=True)
+def fake_zotero(monkeypatch):
+    monkeypatch.setattr(oauth_provider_mod.zotero, "Zotero", _FakeZotero)
+
+
 @pytest.fixture
 def provider(tmp_path) -> ZoteroMCPOAuthProvider:
-    store = TokenStore(str(tmp_path / "store.json"))
-    return ZoteroMCPOAuthProvider(store, username="thomas", password="s3cret")
+    store = TokenStore(
+        str(tmp_path / "store.json"), fernet_key=Fernet.generate_key().decode()
+    )
+    return ZoteroMCPOAuthProvider(store)
 
 
 @pytest.fixture
@@ -94,17 +119,27 @@ async def test_get_pending_raises_for_unknown_login_id(provider):
         provider.get_pending("does-not-exist")
 
 
-async def test_complete_login_wrong_password_keeps_pending_for_retry(
+async def test_complete_login_invalid_key_keeps_pending_for_retry(
     provider, client_info
 ):
     url = await provider.authorize(client_info, auth_params())
     login_id = url.split("login_id=")[1]
 
     with pytest.raises(InvalidCredentialsError):
-        await provider.complete_login(login_id, "thomas", "wrong")
+        await provider.complete_login(login_id, "123", "user", "wrong-key")
 
     # Pending authorization must still be there -- a typo shouldn't burn the flow.
     assert provider.get_pending(login_id) is not None
+    # And nothing gets onboarded for a key that failed validation.
+    assert provider._store.get_tenant("123") is None
+
+
+async def test_complete_login_rejects_bad_library_type(provider, client_info):
+    url = await provider.authorize(client_info, auth_params())
+    login_id = url.split("login_id=")[1]
+
+    with pytest.raises(InvalidCredentialsError):
+        await provider.complete_login(login_id, "123", "nonsense", "valid-key")
 
 
 async def test_complete_login_success_redirects_with_code_and_state(
@@ -113,7 +148,7 @@ async def test_complete_login_success_redirects_with_code_and_state(
     url = await provider.authorize(client_info, auth_params(state="my-state"))
     login_id = url.split("login_id=")[1]
 
-    redirect_url = await provider.complete_login(login_id, "thomas", "s3cret")
+    redirect_url = await provider.complete_login(login_id, "123", "user", "valid-key")
 
     parsed = urlparse(redirect_url)
     assert parsed.netloc == "claude.ai"
@@ -126,10 +161,44 @@ async def test_complete_login_success_redirects_with_code_and_state(
         provider.get_pending(login_id)
 
 
+async def test_complete_login_persists_tenant_and_sets_subject_on_code(
+    provider, client_info
+):
+    url = await provider.authorize(client_info, auth_params())
+    login_id = url.split("login_id=")[1]
+
+    redirect_url = await provider.complete_login(login_id, "123", "user", "valid-key")
+
+    tenant = provider._store.get_tenant("123")
+    assert tenant == {
+        "library_id": "123",
+        "library_type": "user",
+        "api_key": "valid-key",
+    }
+
+    code = parse_qs(urlparse(redirect_url).query)["code"][0]
+    auth_code = await provider.load_authorization_code(client_info, code)
+    assert auth_code is not None
+    assert auth_code.subject == "123"
+
+
+async def test_complete_login_upserts_returning_tenant(provider, client_info):
+    url = await provider.authorize(client_info, auth_params())
+    login_id = url.split("login_id=")[1]
+    await provider.complete_login(login_id, "123", "user", "valid-key")
+
+    url2 = await provider.authorize(client_info, auth_params())
+    login_id2 = url2.split("login_id=")[1]
+    await provider.complete_login(login_id2, "123", "user", "valid-key")
+
+    # Still just one tenant record for library_id "123", not an error.
+    assert provider._store.get_tenant("123")["api_key"] == "valid-key"
+
+
 async def test_authorization_code_can_be_exchanged_once(provider, client_info):
     url = await provider.authorize(client_info, auth_params())
     login_id = url.split("login_id=")[1]
-    redirect_url = await provider.complete_login(login_id, "thomas", "s3cret")
+    redirect_url = await provider.complete_login(login_id, "123", "user", "valid-key")
     code = parse_qs(urlparse(redirect_url).query)["code"][0]
 
     auth_code = await provider.load_authorization_code(client_info, code)
@@ -143,6 +212,26 @@ async def test_authorization_code_can_be_exchanged_once(provider, client_info):
 
     # Code is single-use.
     assert await provider.load_authorization_code(client_info, code) is None
+
+
+async def test_exchange_authorization_code_carries_subject_onto_tokens(
+    provider, client_info
+):
+    url = await provider.authorize(client_info, auth_params())
+    login_id = url.split("login_id=")[1]
+    redirect_url = await provider.complete_login(login_id, "123", "user", "valid-key")
+    code = parse_qs(urlparse(redirect_url).query)["code"][0]
+    auth_code = await provider.load_authorization_code(client_info, code)
+
+    tokens = await provider.exchange_authorization_code(client_info, auth_code)
+
+    access_token = await provider.load_access_token(tokens.access_token)
+    assert access_token is not None
+    assert access_token.subject == "123"
+
+    refresh_token = await provider.load_refresh_token(client_info, tokens.refresh_token)
+    assert refresh_token is not None
+    assert refresh_token.subject == "123"
 
 
 async def test_load_access_token_roundtrip(provider):
@@ -179,7 +268,7 @@ async def test_load_access_token_unknown_returns_none(provider):
 
 async def test_exchange_refresh_token_rotates_tokens(provider, client_info):
     refresh_token = RefreshToken(
-        token="r1", client_id="client-1", scopes=["a"], expires_at=None
+        token="r1", client_id="client-1", scopes=["a"], expires_at=None, subject="123"
     )
     provider._store.put("refresh_tokens", "r1", refresh_token.model_dump(mode="json"))
 
@@ -192,6 +281,26 @@ async def test_exchange_refresh_token_rotates_tokens(provider, client_info):
 
     # Old refresh token is consumed.
     assert await provider.load_refresh_token(client_info, "r1") is None
+
+
+async def test_exchange_refresh_token_preserves_subject(provider, client_info):
+    refresh_token = RefreshToken(
+        token="r2", client_id="client-1", scopes=["a"], expires_at=None, subject="123"
+    )
+    provider._store.put("refresh_tokens", "r2", refresh_token.model_dump(mode="json"))
+    loaded = await provider.load_refresh_token(client_info, "r2")
+
+    tokens = await provider.exchange_refresh_token(client_info, loaded, ["a"])
+
+    new_access_token = await provider.load_access_token(tokens.access_token)
+    assert new_access_token is not None
+    assert new_access_token.subject == "123"
+
+    new_refresh_token = await provider.load_refresh_token(
+        client_info, tokens.refresh_token
+    )
+    assert new_refresh_token is not None
+    assert new_refresh_token.subject == "123"
 
 
 async def test_revoke_token_removes_access_token(provider):

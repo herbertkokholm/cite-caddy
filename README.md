@@ -43,14 +43,26 @@ implementing delete/move tools:
 
 ## Configuration
 
-Library to connect to is a setting, not hardcoded — this server should work
-against whichever Zotero library its deployment is pointed at.
+**stdio mode** (local, single-user — no `$PORT`): the library to connect to
+comes from env vars.
 
 ```
 ZOTERO_LIBRARY_ID      numeric library ID (user or group)
 ZOTERO_LIBRARY_TYPE    "user" or "group" (default: user)
 ZOTERO_API_KEY         from Zotero -> Settings -> Security -> Applications
                         (needs write permission, not just read)
+```
+
+**HTTP mode** (remote, multi-tenant — `$PORT` set): there's no single
+configured library — each caller brings their own Zotero Library ID/Type/API
+Key via the `/login` form (see "Deployment" below). Instead:
+
+```
+MCP_TOKEN_STORE_KEY    Fernet key encrypting onboarded tenants' API keys at
+                        rest; generate once at deploy time with:
+                        python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+MCP_PUBLIC_URL          public HTTPS URL this server is reachable at
+MCP_DATA_DIR            where OAuth clients/tokens/tenants persist (default: ./.data)
 ```
 
 ## Deployment
@@ -68,19 +80,28 @@ authorization-code dance against a new server, so a plain 401 in front of
 the server (as Basic Auth would produce) gets read as "this server needs
 OAuth" and fails once it hits a nonexistent `/authorize` endpoint.
 Implementing a real (if minimal) OAuth server is what makes "Add custom
-connector" work. This server has exactly one resource owner, so
-`/authorize` doesn't delegate to a third-party identity provider — it
-shows a first-party login form checked against `MCP_AUTH_USERNAME`/
-`MCP_AUTH_PASSWORD`. Any MCP client can dynamically register itself (RFC
-7591), but completing that login form is what actually gates access. See
-`app/oauth_provider.py`'s module docstring for the full flow. Registered
-clients and issued tokens persist to `MCP_DATA_DIR` (a Docker volume) so
-redeploys don't log connected clients out.
+connector" work.
 
-`.env` on the host (not in this repo) holds `ZOTERO_LIBRARY_ID`/
-`ZOTERO_LIBRARY_TYPE`/`ZOTERO_API_KEY` plus `MCP_AUTH_USERNAME`/
-`MCP_AUTH_PASSWORD`/`MCP_PUBLIC_URL`, consumed via `docker-compose.yml`'s
-`env_file:`.
+**Multi-tenant and self-service**: `/authorize` doesn't delegate to a
+third-party identity provider — it shows a first-party login form asking
+for a Zotero Library ID, Library Type, and API Key. Submitting the form
+validates the key directly against the Zotero API; a successful
+validation both grants access and registers ("onboards") that library as
+a tenant of this server, all in one step — there's no separate sign-up
+and no admin approval. Any MCP client can dynamically register itself
+(RFC 7591), but completing the login form with a working Zotero key is
+what actually gates access. Each caller's tool calls are then routed to
+their own Zotero library, not a shared one. See
+`app/oauth_provider.py`'s module docstring for the full flow. Registered
+clients, issued tokens, and onboarded tenants' credentials (API keys
+encrypted at rest with `MCP_TOKEN_STORE_KEY`) persist to `MCP_DATA_DIR`
+(a Docker volume) so redeploys don't log connected clients out or forget
+onboarded tenants.
+
+`.env` on the host (not in this repo) holds `MCP_TOKEN_STORE_KEY`/
+`MCP_PUBLIC_URL`, consumed via `docker-compose.yml`'s `env_file:`.
+`ZOTERO_LIBRARY_ID`/`ZOTERO_LIBRARY_TYPE`/`ZOTERO_API_KEY` are not needed
+for the HTTP deployment — those only apply to stdio mode.
 
 `.github/workflows/deploy.yml` automates redeploying to an already
 set-up host: manual trigger only (`workflow_dispatch`, never on push),
@@ -154,8 +175,9 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 Zotero Web API's item/collection/tag/trash/saved-search/schema surface
 (36 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the
-server's public URL) — the OAuth flow described above prompts for
-username/password in-browser, no manually-configured headers needed.
+server's public URL) — the OAuth flow described above prompts for your
+own Zotero Library ID/Type/API Key in-browser, no manually-configured
+headers needed, and no admin sign-up step.
 
 ## Contributing
 

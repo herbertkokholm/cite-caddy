@@ -65,29 +65,24 @@ class Settings:
 
 
 @dataclass(frozen=True)
-class AuthSettings:
-    """Credentials for this server's own OAuth login form (see
-    app/oauth_provider.py) -- distinct from the Zotero API credentials
-    above. Only meaningful when serving over HTTP ($PORT set); a local
-    stdio server has no network exposure to gate.
+class HttpSettings:
+    """Server-level config for HTTP mode (see app/oauth_provider.py,
+    app/oauth_store.py) -- distinct from the Zotero API credentials
+    above, which in HTTP mode are supplied per-tenant at login instead of
+    via env vars. Only meaningful when serving over HTTP ($PORT set); a
+    local stdio server has no network exposure to gate.
     """
 
-    username: str
-    password: str
     public_url: str
     data_dir: str
+    token_store_key: str
 
     @classmethod
-    def from_env(cls) -> AuthSettings:
-        username = os.environ.get("MCP_AUTH_USERNAME")
-        password = os.environ.get("MCP_AUTH_PASSWORD")
+    def from_env(cls) -> HttpSettings:
         public_url = os.environ.get("MCP_PUBLIC_URL")
         data_dir = os.environ.get("MCP_DATA_DIR", os.path.join(ROOT, ".data"))
+        token_store_key = os.environ.get("MCP_TOKEN_STORE_KEY")
 
-        if not username:
-            raise ConfigError("MCP_AUTH_USERNAME must be set (see .env.example)")
-        if not password:
-            raise ConfigError("MCP_AUTH_PASSWORD must be set (see .env.example)")
         if not public_url:
             raise ConfigError(
                 "MCP_PUBLIC_URL must be set (see .env.example) -- the public "
@@ -96,10 +91,17 @@ class AuthSettings:
                 "issuer/resource URL, which can't be inferred from inside "
                 "the container)"
             )
+        if not token_store_key:
+            raise ConfigError(
+                "MCP_TOKEN_STORE_KEY must be set (see .env.example) -- a "
+                "Fernet key used to encrypt tenants' Zotero API keys at "
+                "rest. Generate one once at deploy time with: python -c "
+                '"from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            )
 
         return cls(
-            username=username,
-            password=password,
             public_url=public_url.rstrip("/"),
             data_dir=data_dir,
+            token_store_key=token_store_key,
         )

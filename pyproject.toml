@@ -9,6 +9,7 @@ keywords = ["mcp", "mcp-server", "model-context-protocol", "zotero", "claude", "
 dependencies = [
     "mcp",
     "pyzotero",
+    "cryptography",
 ]
 
 [project.optional-dependencies]

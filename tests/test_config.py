@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import AuthSettings, ConfigError, Settings
+from app.config import ConfigError, HttpSettings, Settings
 
 
 def test_from_env_requires_library_id(monkeypatch):
@@ -52,56 +52,39 @@ def test_from_env_reads_all_values(monkeypatch):
     )
 
 
-# ---- AuthSettings ----------------------------------------------------------
+# ---- HttpSettings ----------------------------------------------------------
 
 
-def _clear_auth_env(monkeypatch):
-    for var in (
-        "MCP_AUTH_USERNAME",
-        "MCP_AUTH_PASSWORD",
-        "MCP_PUBLIC_URL",
-        "MCP_DATA_DIR",
-    ):
+def _clear_http_env(monkeypatch):
+    for var in ("MCP_PUBLIC_URL", "MCP_DATA_DIR", "MCP_TOKEN_STORE_KEY"):
         monkeypatch.delenv(var, raising=False)
 
 
-def test_auth_settings_requires_username(monkeypatch):
-    _clear_auth_env(monkeypatch)
-    monkeypatch.setenv("MCP_AUTH_PASSWORD", "pw")
-    monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test")
-    with pytest.raises(ConfigError, match="MCP_AUTH_USERNAME"):
-        AuthSettings.from_env()
-
-
-def test_auth_settings_requires_password(monkeypatch):
-    _clear_auth_env(monkeypatch)
-    monkeypatch.setenv("MCP_AUTH_USERNAME", "thomas")
-    monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test")
-    with pytest.raises(ConfigError, match="MCP_AUTH_PASSWORD"):
-        AuthSettings.from_env()
-
-
-def test_auth_settings_requires_public_url(monkeypatch):
-    _clear_auth_env(monkeypatch)
-    monkeypatch.setenv("MCP_AUTH_USERNAME", "thomas")
-    monkeypatch.setenv("MCP_AUTH_PASSWORD", "pw")
+def test_http_settings_requires_public_url(monkeypatch):
+    _clear_http_env(monkeypatch)
+    monkeypatch.setenv("MCP_TOKEN_STORE_KEY", "fake-fernet-key")
     with pytest.raises(ConfigError, match="MCP_PUBLIC_URL"):
-        AuthSettings.from_env()
+        HttpSettings.from_env()
 
 
-def test_auth_settings_strips_trailing_slash_from_public_url(monkeypatch):
-    _clear_auth_env(monkeypatch)
-    monkeypatch.setenv("MCP_AUTH_USERNAME", "thomas")
-    monkeypatch.setenv("MCP_AUTH_PASSWORD", "pw")
+def test_http_settings_requires_token_store_key(monkeypatch):
+    _clear_http_env(monkeypatch)
+    monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test")
+    with pytest.raises(ConfigError, match="MCP_TOKEN_STORE_KEY"):
+        HttpSettings.from_env()
+
+
+def test_http_settings_strips_trailing_slash_from_public_url(monkeypatch):
+    _clear_http_env(monkeypatch)
     monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test/")
-    settings = AuthSettings.from_env()
+    monkeypatch.setenv("MCP_TOKEN_STORE_KEY", "fake-fernet-key")
+    settings = HttpSettings.from_env()
     assert settings.public_url == "https://example.test"
 
 
-def test_auth_settings_defaults_data_dir(monkeypatch):
-    _clear_auth_env(monkeypatch)
-    monkeypatch.setenv("MCP_AUTH_USERNAME", "thomas")
-    monkeypatch.setenv("MCP_AUTH_PASSWORD", "pw")
+def test_http_settings_defaults_data_dir(monkeypatch):
+    _clear_http_env(monkeypatch)
     monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test")
-    settings = AuthSettings.from_env()
+    monkeypatch.setenv("MCP_TOKEN_STORE_KEY", "fake-fernet-key")
+    settings = HttpSettings.from_env()
     assert settings.data_dir.endswith(".data")
