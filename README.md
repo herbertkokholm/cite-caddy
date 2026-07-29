@@ -123,7 +123,10 @@ to; its `id` doubles as `target_library_id` (with
 `list_item_type_fields`/`list_item_creator_types` describe what
 `create_item`/`update_item` will actually accept for a given
 `item_type` -- check them instead of guessing when a validation error
-comes back.
+comes back. `search_items`' `query` defaults to Zotero's quick search
+(title/creator/year); pass `full_text=True` to also match the indexed
+content of attached files and notes (Zotero's `qmode="everything"`),
+requiring a non-empty `query`.
 
 Safe, key-preserving writes: `create_item`, `create_collection`,
 `create_saved_search`, `update_collection`, `update_item`,

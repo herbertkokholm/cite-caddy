@@ -301,6 +301,7 @@ def search_items(
     collection_key: str | None = None,
     limit: int = 25,
     start: int = 0,
+    full_text: bool = False,
 ) -> list[dict]:
     """Search the Zotero library. Read-only.
 
@@ -312,6 +313,10 @@ def search_items(
     collection_key: filter to items filed in this collection (see
         list_collections).
     limit/start: pagination (default limit 25).
+    full_text: also match `query` against the indexed content of attached
+        files and notes, not just title/creator/year (Zotero's
+        qmode="everything"). Slower than the default search. Requires a
+        non-empty query -- raises a validation error otherwise.
 
     Each result includes `key` and `version` -- pass both to update_item,
     add_tags/remove_tags/set_tags, add_to_collection/remove_from_collection,
@@ -324,6 +329,7 @@ def search_items(
         collection_key=collection_key,
         limit=limit,
         start=start,
+        full_text=full_text,
     )
 
 

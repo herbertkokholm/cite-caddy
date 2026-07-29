@@ -207,11 +207,23 @@ class FakeZotero:
         results = [i for i in self._items.values() if not i["data"].get("deleted")]
         q = kwargs.get("q")
         if q:
-            results = [
-                i
-                for i in results
-                if q.lower() in (i["data"].get("title") or "").lower()
-            ]
+            needle = q.lower()
+            if kwargs.get("qmode") == "everything":
+                results = [
+                    i
+                    for i in results
+                    if needle in (i["data"].get("title") or "").lower()
+                    or needle
+                    in (
+                        self._fulltext.get(i["data"]["key"], {}).get("content") or ""
+                    ).lower()
+                ]
+            else:
+                results = [
+                    i
+                    for i in results
+                    if needle in (i["data"].get("title") or "").lower()
+                ]
         item_type = kwargs.get("itemType")
         if item_type:
             results = [i for i in results if i["data"].get("itemType") == item_type]

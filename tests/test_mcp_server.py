@@ -36,6 +36,20 @@ def test_search_items_tool(fake_service):
     assert results[0]["title"] == "Findable"
 
 
+def test_search_items_tool_full_text(fake_service):
+    hit = fake_service.seed_item("book", {"title": "Unrelated Title"})
+    fake_service.seed_fulltext(hit["key"], "mentions cryptographic protocols")
+
+    results = mcp_server.search_items(query="cryptographic protocols", full_text=True)
+
+    assert [r["key"] for r in results] == [hit["key"]]
+
+
+def test_search_items_tool_full_text_without_query_rejected(fake_service):
+    with pytest.raises(ValidationError):
+        mcp_server.search_items(full_text=True)
+
+
 def test_get_item_tool_not_found(fake_service):
     with pytest.raises(ItemNotFoundError):
         mcp_server.get_item("NOPE")
