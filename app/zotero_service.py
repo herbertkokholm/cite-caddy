@@ -240,10 +240,15 @@ class ZoteroService:
         collection_key: str | None = None,
         limit: int = 25,
         start: int = 0,
+        full_text: bool = False,
     ) -> list[dict]:
+        if full_text and not query:
+            raise ValidationError("full_text=True requires a non-empty query")
         kwargs: dict[str, Any] = {"limit": limit, "start": start}
         if query:
             kwargs["q"] = query
+            if full_text:
+                kwargs["qmode"] = "everything"
         if item_type:
             kwargs["itemType"] = item_type
         if tag:

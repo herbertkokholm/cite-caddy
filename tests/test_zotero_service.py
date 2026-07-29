@@ -23,6 +23,30 @@ def test_search_items_by_query(service, fake_zot):
     assert "version" in results[0]
 
 
+def test_search_items_full_text_matches_attachment_content(service, fake_zot):
+    hit = fake_zot.seed_item("journalArticle", {"title": "Unrelated Title"})
+    fake_zot.seed_item("journalArticle", {"title": "Also Unrelated"})
+    fake_zot.seed_fulltext(hit["key"], "contains the phrase quantum entanglement")
+
+    results = service.search_items(query="quantum entanglement", full_text=True)
+
+    assert [r["key"] for r in results] == [hit["key"]]
+
+
+def test_search_items_full_text_still_matches_title(service, fake_zot):
+    hit = fake_zot.seed_item("journalArticle", {"title": "Deep Learning for X"})
+    fake_zot.seed_item("journalArticle", {"title": "Unrelated Paper"})
+
+    results = service.search_items(query="deep learning", full_text=True)
+
+    assert [r["key"] for r in results] == [hit["key"]]
+
+
+def test_search_items_full_text_without_query_is_rejected(service):
+    with pytest.raises(ValidationError):
+        service.search_items(full_text=True)
+
+
 def test_search_items_by_collection(service, fake_zot):
     coll = fake_zot.seed_collection("My Collection")
     in_coll = fake_zot.seed_item("book", {"title": "In", "collections": [coll["key"]]})
