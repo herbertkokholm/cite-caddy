@@ -22,7 +22,7 @@ All Python source lives under `app/` (a single package):
   self-service multi-tenant onboarding: `complete_login` validates a
   submitted Zotero API key live and persists it as a tenant, keyed by
   `library_id` and encrypted at rest.
-- `app/mcp_server.py` — wires the above into FastMCP tools.
+- `app/mcp_server.py` — wires the above into `MCPServer` tools.
 
 `tests/` mirrors this 1:1, plus `tests/fakes.py`'s in-memory fake Zotero
 client.

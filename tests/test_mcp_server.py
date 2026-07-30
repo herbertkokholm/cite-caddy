@@ -1,4 +1,4 @@
-"""Tests the MCP tool functions in app/mcp_server.py directly (FastMCP's
+"""Tests the MCP tool functions in app/mcp_server.py directly (MCPServer's
 @mcp.tool() decorator returns the plain function, so these are callable
 without going through the MCP protocol/transport at all) against a
 ZoteroService backed by the in-memory FakeZotero -- never a real Zotero

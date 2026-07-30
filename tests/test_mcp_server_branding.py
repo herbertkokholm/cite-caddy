@@ -29,19 +29,19 @@ def test_website_url_and_icons_omitted_when_unset(fresh_module, monkeypatch):
     monkeypatch.delenv("MCP_WEBSITE_URL", raising=False)
     module = fresh_module()
 
-    assert module.mcp._mcp_server.website_url is None
-    assert module.mcp._mcp_server.icons is None
+    assert module.mcp.website_url is None
+    assert module.mcp.icons is None
 
 
 def test_website_url_and_icons_set_when_configured(fresh_module, monkeypatch):
     monkeypatch.setenv("MCP_WEBSITE_URL", "https://example.test/cite-caddy/")
     module = fresh_module()
 
-    assert module.mcp._mcp_server.website_url == "https://example.test/cite-caddy/"
-    icons = module.mcp._mcp_server.icons
+    assert module.mcp.website_url == "https://example.test/cite-caddy/"
+    icons = module.mcp.icons
     assert icons is not None
     assert icons[0].src == "https://example.test/cite-caddy/icons/icon.svg"
-    assert icons[0].mimeType == "image/svg+xml"
+    assert icons[0].mime_type == "image/svg+xml"
 
 
 def test_reports_own_package_version_not_mcp_sdk_version(fresh_module, monkeypatch):
@@ -49,4 +49,4 @@ def test_reports_own_package_version_not_mcp_sdk_version(fresh_module, monkeypat
 
     module = fresh_module()
 
-    assert module.mcp._mcp_server.version == pkg_version("cite-caddy")
+    assert module.mcp.version == pkg_version("cite-caddy")
