@@ -2,6 +2,10 @@ name: Publish npm placeholder
 
 on:
   workflow_dispatch:
+    inputs:
+      otp:
+        description: '2FA one-time password from your authenticator app (needed at publish time -- expires in ~30s)'
+        required: true
 
 permissions:
   contents: read
@@ -22,6 +26,6 @@ jobs:
 
       - name: Publish placeholder package
         working-directory: npm
-        run: npm publish --access public
+        run: npm publish --access public --otp="${{ github.event.inputs.otp }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
