@@ -34,13 +34,13 @@ def test_website_url_and_icons_omitted_when_unset(fresh_module, monkeypatch):
 
 
 def test_website_url_and_icons_set_when_configured(fresh_module, monkeypatch):
-    monkeypatch.setenv("MCP_WEBSITE_URL", "https://example.test/zotero-mcp/")
+    monkeypatch.setenv("MCP_WEBSITE_URL", "https://example.test/cite-caddy/")
     module = fresh_module()
 
-    assert module.mcp._mcp_server.website_url == "https://example.test/zotero-mcp/"
+    assert module.mcp._mcp_server.website_url == "https://example.test/cite-caddy/"
     icons = module.mcp._mcp_server.icons
     assert icons is not None
-    assert icons[0].src == "https://example.test/zotero-mcp/icons/icon.svg"
+    assert icons[0].src == "https://example.test/cite-caddy/icons/icon.svg"
     assert icons[0].mimeType == "image/svg+xml"
 
 
@@ -49,4 +49,4 @@ def test_reports_own_package_version_not_mcp_sdk_version(fresh_module, monkeypat
 
     module = fresh_module()
 
-    assert module.mcp._mcp_server.version == pkg_version("zotero-mcp")
+    assert module.mcp._mcp_server.version == pkg_version("cite-caddy")

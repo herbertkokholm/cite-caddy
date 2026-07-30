@@ -103,7 +103,7 @@ class LoginSessionExpiredError(Exception):
     pass
 
 
-class ZoteroMCPOAuthProvider(OAuthAuthorizationServerProvider):
+class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
     def __init__(self, store: TokenStore) -> None:
         self._store = store
         self._pending: dict[str, PendingAuthorization] = {}

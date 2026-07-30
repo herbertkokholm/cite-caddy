@@ -72,9 +72,9 @@ from starlette.responses import (
 
 from app.config import HttpSettings, Settings, load_dotenv
 from app.oauth_provider import (
+    CiteCaddyOAuthProvider,
     InvalidCredentialsError,
     LoginSessionExpiredError,
-    ZoteroMCPOAuthProvider,
 )
 from app.oauth_store import TokenStore
 from app.zotero_service import ZoteroService
@@ -129,7 +129,7 @@ _ICONS = (
     else None
 )
 
-_oauth_provider: ZoteroMCPOAuthProvider | None = None
+_oauth_provider: CiteCaddyOAuthProvider | None = None
 _token_store: TokenStore | None = None
 
 if _PORT:
@@ -138,9 +138,9 @@ if _PORT:
         os.path.join(_http_settings.data_dir, "oauth_store.json"),
         fernet_key=_http_settings.token_store_key,
     )
-    _oauth_provider = ZoteroMCPOAuthProvider(store=_token_store)
+    _oauth_provider = CiteCaddyOAuthProvider(store=_token_store)
     mcp = FastMCP(
-        "zotero-mcp",
+        "Cite Caddy",
         instructions=_INSTRUCTIONS,
         website_url=_WEBSITE_URL,
         icons=_ICONS,
@@ -157,7 +157,7 @@ if _PORT:
     )
 else:
     mcp = FastMCP(
-        "zotero-mcp",
+        "Cite Caddy",
         instructions=_INSTRUCTIONS,
         website_url=_WEBSITE_URL,
         icons=_ICONS,
@@ -166,7 +166,7 @@ else:
 # FastMCP has no `version=` constructor param, so without this the SDK's
 # create_initialization_options() falls back to reporting the installed
 # `mcp` package's own version as serverInfo.version instead of ours.
-mcp._mcp_server.version = _pkg_version("zotero-mcp")
+mcp._mcp_server.version = _pkg_version("cite-caddy")
 
 
 if _PORT:
@@ -186,7 +186,7 @@ if _PORT:
             t: " selected" if t == library_type else "" for t in ("user", "group")
         }
         return f"""<!doctype html>
-<title>zotero-mcp login</title>
+<title>Cite Caddy login</title>
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 24rem; margin: 4rem auto; }}
   input, select {{ display: block; width: 100%; margin: 0.5rem 0 1rem; padding: 0.5rem; box-sizing: border-box; }}
@@ -194,7 +194,7 @@ if _PORT:
   .error {{ color: #b00020; }}
   .hint {{ color: #666; font-size: 0.9em; }}
 </style>
-<h1>zotero-mcp</h1>
+<h1>Cite Caddy</h1>
 <p>Connect this MCP client to your own Zotero library. Signing in with a
 valid Zotero API key both grants access and registers your library with
 this server -- no separate sign-up.</p>
@@ -680,7 +680,7 @@ def update_collection(
     annotations=ToolAnnotations(
         title="Move Zotero Item to Trash",
         readOnlyHint=False,
-        destructiveHint=False,
+        destructiveHint=True,
         idempotentHint=True,
         openWorldHint=True,
     )

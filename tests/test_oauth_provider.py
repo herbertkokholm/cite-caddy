@@ -8,9 +8,9 @@ from mcp.shared.auth import InvalidRedirectUriError, OAuthClientInformationFull
 
 import app.oauth_provider as oauth_provider_mod
 from app.oauth_provider import (
+    CiteCaddyOAuthProvider,
     InvalidCredentialsError,
     LoginSessionExpiredError,
-    ZoteroMCPOAuthProvider,
 )
 from app.oauth_store import TokenStore
 
@@ -37,11 +37,11 @@ def fake_zotero(monkeypatch):
 
 
 @pytest.fixture
-def provider(tmp_path) -> ZoteroMCPOAuthProvider:
+def provider(tmp_path) -> CiteCaddyOAuthProvider:
     store = TokenStore(
         str(tmp_path / "store.json"), fernet_key=Fernet.generate_key().decode()
     )
-    return ZoteroMCPOAuthProvider(store)
+    return CiteCaddyOAuthProvider(store)
 
 
 @pytest.fixture
