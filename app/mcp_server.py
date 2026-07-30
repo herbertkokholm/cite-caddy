@@ -43,12 +43,15 @@ Env vars (see README's "Configuration" section):
     MCP_TOKEN_STORE_KEY    Fernet key encrypting tenants' API keys at rest (HTTP mode only)
     MCP_PUBLIC_URL         public HTTPS URL, e.g. https://your-domain.example
     MCP_DATA_DIR           where OAuth clients/tokens/tenants persist (default: ./.data)
+    MCP_WEBSITE_URL        optional; if set, this server's website_url/icons/icon.svg
+                            is reported in serverInfo (icons.src is this + "icons/icon.svg")
 """
 
 from __future__ import annotations
 
 import html
 import os
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -113,14 +116,18 @@ _INSTRUCTIONS = (
     "filesystem."
 )
 
-_WEBSITE_URL = "https://herbertkokholm.github.io/zotero-mcp/"
-_ICONS = [
-    Icon(
-        src=f"{_WEBSITE_URL}icons/icon.svg",
-        mimeType="image/svg+xml",
-        sizes=["any"],
-    )
-]
+_WEBSITE_URL = os.environ.get("MCP_WEBSITE_URL")
+_ICONS = (
+    [
+        Icon(
+            src=f"{_WEBSITE_URL}icons/icon.svg",
+            mimeType="image/svg+xml",
+            sizes=["any"],
+        )
+    ]
+    if _WEBSITE_URL
+    else None
+)
 
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
 _token_store: TokenStore | None = None
@@ -155,6 +162,11 @@ else:
         website_url=_WEBSITE_URL,
         icons=_ICONS,
     )
+
+# FastMCP has no `version=` constructor param, so without this the SDK's
+# create_initialization_options() falls back to reporting the installed
+# `mcp` package's own version as serverInfo.version instead of ours.
+mcp._mcp_server.version = _pkg_version("zotero-mcp")
 
 
 if _PORT:

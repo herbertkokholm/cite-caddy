@@ -1,11 +1,16 @@
 FROM python:3.14-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY app ./app
 
-RUN pip install --no-cache-dir .
+# --frozen: install exactly what's pinned in uv.lock (fail instead of
+# re-resolving) so the image matches what's tested locally/in CI, instead
+# of silently picking up whatever's newest on PyPI at build time.
+RUN uv sync --frozen --no-dev
 
 # Deploy host's nginx vhost proxies to 127.0.0.1:<port>, mapped via
 # `docker run -p 127.0.0.1:<port>:8000`. $PORT set (to 8000, matching this
@@ -14,4 +19,4 @@ RUN pip install --no-cache-dir .
 ENV PORT=8000
 EXPOSE 8000
 
-CMD ["python", "-m", "app.mcp_server"]
+CMD ["/app/.venv/bin/python", "-m", "app.mcp_server"]
