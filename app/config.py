@@ -1,4 +1,4 @@
-"""Settings for zotero-mcp, sourced from environment variables (see
+"""Settings for Cite Caddy, sourced from environment variables (see
 .env.example) -- never hardcoded, since this server must work against
 whichever Zotero library its deployment is pointed at (see README's
 "Configuration" section).

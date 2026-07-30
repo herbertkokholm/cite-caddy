@@ -1,15 +1,20 @@
-# zotero-mcp
+# Cite Caddy
 
-A standalone, remote MCP server giving full read/write access to a Zotero
-library — search, add, tag, update, delete, and move items; create, rename,
-and delete collections; upload/download attachments and read their
-extracted full text; read and write item notes; manage tags, trash, and
-saved searches library-wide; and look up Zotero's own item-type/field
-schema. 36 tools total — see [Tools](#tools) below for the full list.
+A reference-library bridge for AI assistants — a standalone, remote MCP
+server.
 
-> Unofficial, community-maintained project. Not affiliated with, endorsed
-> by, or sponsored by the Corporation for Digital Scholarship (Zotero) —
+> Independent, unofficial project. Not affiliated with, endorsed by, or
+> sponsored by the Corporation for Digital Scholarship (Zotero) —
 > see [Zotero's trademark policy](https://www.zotero.org/support/terms/trademark).
+> Built on the Zotero Web API; today's backend is Zotero, but the name and
+> tool surface are meant to support others later.
+
+Cite Caddy gives full read/write access to a Zotero library — search, add,
+tag, update, delete, and move items; create, rename, and delete
+collections; upload/download attachments and read their extracted full
+text; read and write item notes; manage tags, trash, and saved searches
+library-wide; and look up Zotero's own item-type/field schema. 36 tools
+total — see [Tools](#tools) below for the full list.
 
 ## Why this exists
 

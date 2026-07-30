@@ -1,6 +1,6 @@
 """Integration test for app/mcp_server.py's HTTP-mode wiring: the real
 FastMCP app, the real mcp SDK OAuth routes (/register, /authorize,
-/token), and this project's own /login routes and ZoteroMCPOAuthProvider,
+/token), and this project's own /login routes and CiteCaddyOAuthProvider,
 all together -- confirming the plumbing is correct, not re-testing the SDK
 or the provider's internals (covered in test_oauth_provider.py).
 

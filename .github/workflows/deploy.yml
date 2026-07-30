@@ -44,12 +44,12 @@ jobs:
             --exclude='.venv' --exclude='.git' --exclude='.github' \
             --exclude='__pycache__' --exclude='.pytest_cache' --exclude='.ruff_cache' \
             --exclude='.env' --exclude='data' --exclude='tests' \
-            ./ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/projects/zotero-mcp/"
+            ./ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/projects/cite-caddy/"
 
       - name: Rebuild and restart container
         run: |
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd /srv/projects/zotero-mcp && docker compose up -d --build"
+            "cd /srv/projects/cite-caddy && docker compose up -d --build"
 
       - name: Verify health
         run: |

@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    container_name: zotero-mcp-app
+    container_name: cite-caddy-app
     restart: unless-stopped
     ports:
       - "127.0.0.1:8100:8100"

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>zotero-mcp</title>
+  <title>Cite Caddy</title>
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
   <meta name="description"
     content="A standalone, remote MCP server giving full read/write access to a Zotero library — 36 tools covering items, collections, tags, trash, saved searches, and schema lookups. Self-service, multi-tenant: connect with your own Zotero API key, gated by a first-party OAuth 2.1 flow.">
@@ -470,7 +470,7 @@
   </style>
   <script>
     (function () {
-      var saved = localStorage.getItem('zmcp-theme');
+      var saved = localStorage.getItem('citecaddy-theme');
       var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
       document.documentElement.setAttribute('data-theme', theme);
     })();
@@ -482,12 +482,12 @@
   <header>
     <div class="htop">
       <img src="icons/icon.svg" alt="" width="24" height="24" style="border-radius: 6px; flex-shrink: 0;">
-      <h1>zotero-mcp</h1>
+      <h1>Cite Caddy</h1>
       <nav>
         <a href="#mcp">MCP</a>
         <a href="#features">Features</a>
         <a href="#safety">Key safety</a>
-        <a href="https://github.com/herbertkokholm/zotero-mcp" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/herbertkokholm/cite-caddy" target="_blank" rel="noopener">GitHub</a>
       </nav>
       <button id="themetog" type="button">Light</button>
     </div>
@@ -505,7 +505,7 @@
     <div class="cta">
       <a class="btn primary" href="#mcp">Connect via MCP</a>
       <a class="btn ghost" href="#safety">Key safety model</a>
-      <a class="btn ghost" href="https://github.com/herbertkokholm/zotero-mcp" target="_blank" rel="noopener">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/herbertkokholm/cite-caddy" target="_blank" rel="noopener">View on GitHub</a>
     </div>
     <p style="color: var(--muted); font-size: 0.85em; margin-top: 1.5em;">
       Unofficial, community-maintained project. Not affiliated with, endorsed
@@ -575,7 +575,7 @@
         <pre>https://your-domain.example/mcp</pre>
 
         <h5>Claude Code</h5>
-        <pre>claude mcp add --transport http zotero \
+        <pre>claude mcp add --transport http cite-caddy \
   https://your-domain.example/mcp</pre>
 
         <h5>Available tools <span style="font-weight:400">— 36 total</span></h5>
@@ -659,18 +659,18 @@
 
   <footer>
     <div class="links">
-      <a href="https://github.com/herbertkokholm/zotero-mcp" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/herbertkokholm/cite-caddy" target="_blank" rel="noopener">GitHub</a>
       <a href="#safety">Key safety</a>
       <a href="#mcp">MCP setup</a>
     </div>
-    zotero-mcp — MIT licensed.
+    Cite Caddy — MIT licensed.
   </footer>
 
   <script>
     var themetog = document.getElementById('themetog');
     function setTheme(t) {
       document.documentElement.setAttribute('data-theme', t);
-      localStorage.setItem('zmcp-theme', t);
+      localStorage.setItem('citecaddy-theme', t);
       themetog.textContent = t === 'dark' ? 'Light' : 'Dark';
     }
     setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
