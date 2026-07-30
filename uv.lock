@@ -288,7 +288,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -708,7 +708,7 @@ wheels = [
 
 [[package]]
 name = "pyzotero"
-version = "1.13.2"
+version = "1.13.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bibtexparser" },
@@ -716,9 +716,9 @@ dependencies = [
     { name = "httpx" },
     { name = "whenever" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/17/ac/83ae168f63c2ae1c0196230990572b05bc601594898b593f4d922eac56f5/pyzotero-1.13.2.tar.gz", hash = "sha256:56b8f82646e8c757933a9ef1baeec7ea84191faef9a626ed221113ef418e7af4", size = 554797, upload-time = "2026-06-23T15:01:30.03Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/ad/df65faf44025486ab85c81bd2506935f0a0fe2b6b891088943b5f988860a/pyzotero-1.13.3.tar.gz", hash = "sha256:a9ff1c3f633f5365f23f7a6e7b98e05cec44e09bc249d91d21d5cf360f86871f", size = 555857, upload-time = "2026-07-28T08:32:03.636Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/1e/3403e3bcd056c169d375a6e1fe14853316d76b9c2dc7ab22042ff553f0ab/pyzotero-1.13.2-py3-none-any.whl", hash = "sha256:17673a9a225de49e152f14621f62d8c5f67103612b859f25a256ef04ea08e65d", size = 51645, upload-time = "2026-06-23T15:01:28.61Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/23/00a66045646ef56b64a1797764ece5f309e35ec13c026293ca19b065a0da/pyzotero-1.13.3-py3-none-any.whl", hash = "sha256:323ba09a7a4341a70ed2289874b5d5a17d5501160d51041c242c549c81d4ffbe", size = 52040, upload-time = "2026-07-28T08:32:02.145Z" },
 ]
 
 [[package]]
