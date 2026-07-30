@@ -1,10 +1,10 @@
 """Integration test for app/mcp_server.py's HTTP-mode wiring: the real
-FastMCP app, the real mcp SDK OAuth routes (/register, /authorize,
+MCPServer app, the real mcp SDK OAuth routes (/register, /authorize,
 /token), and this project's own /login routes and CiteCaddyOAuthProvider,
 all together -- confirming the plumbing is correct, not re-testing the SDK
 or the provider's internals (covered in test_oauth_provider.py).
 
-app/mcp_server.py builds its FastMCP instance and OAuth provider at import
+app/mcp_server.py builds its MCPServer instance and OAuth provider at import
 time from env vars, so this module is imported fresh (via importlib, after
 clearing sys.modules) under test-specific env vars -- other test modules
 import it without $PORT set, for the stdio-mode tool tests.
@@ -232,6 +232,6 @@ def test_full_oauth_flow_yields_working_bearer_token(client):
     access_token = token_resp.json()["access_token"]
 
     mcp_resp = client.get("/mcp", headers={"Authorization": f"Bearer {access_token}"})
-    # Not 401 -- the token authenticated; 406 is FastMCP's own response to a
+    # Not 401 -- the token authenticated; 406 is MCPServer's own response to a
     # plain GET without the streamable-http Accept headers, expected here.
     assert mcp_resp.status_code != 401

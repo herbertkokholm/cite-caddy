@@ -54,14 +54,14 @@ import os
 from importlib.metadata import version as _pkg_version
 from typing import Any
 
+from mcp.server import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import (
     AuthSettings,
     ClientRegistrationOptions,
     RevocationOptions,
 )
-from mcp.server.fastmcp import FastMCP, Icon
-from mcp.types import ToolAnnotations
+from mcp.types import Icon, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
@@ -139,14 +139,12 @@ if _PORT:
         fernet_key=_http_settings.token_store_key,
     )
     _oauth_provider = CiteCaddyOAuthProvider(store=_token_store)
-    mcp = FastMCP(
+    mcp = MCPServer(
         "Cite Caddy",
         instructions=_INSTRUCTIONS,
         website_url=_WEBSITE_URL,
         icons=_ICONS,
-        host="0.0.0.0",
-        port=int(_PORT),
-        stateless_http=True,
+        version=_pkg_version("cite-caddy"),
         auth_server_provider=_oauth_provider,
         auth=AuthSettings(
             issuer_url=_http_settings.public_url,
@@ -156,17 +154,13 @@ if _PORT:
         ),
     )
 else:
-    mcp = FastMCP(
+    mcp = MCPServer(
         "Cite Caddy",
         instructions=_INSTRUCTIONS,
         website_url=_WEBSITE_URL,
         icons=_ICONS,
+        version=_pkg_version("cite-caddy"),
     )
-
-# FastMCP has no `version=` constructor param, so without this the SDK's
-# create_initialization_options() falls back to reporting the installed
-# `mcp` package's own version as serverInfo.version instead of ours.
-mcp._mcp_server.version = _pkg_version("cite-caddy")
 
 
 if _PORT:
@@ -1048,7 +1042,14 @@ def move_item_to_different_library(
 def main() -> None:
     if not _PORT:
         Settings.from_env()  # stdio mode: fail fast at startup, not on first tool call
-    mcp.run(transport="streamable-http" if _PORT else "stdio")
+        mcp.run(transport="stdio")
+    else:
+        mcp.run(
+            transport="streamable-http",
+            host="0.0.0.0",
+            port=int(_PORT),
+            stateless_http=True,
+        )
 
 
 if __name__ == "__main__":
