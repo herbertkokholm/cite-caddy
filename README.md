@@ -7,6 +7,10 @@ extracted full text; read and write item notes; manage tags, trash, and
 saved searches library-wide; and look up Zotero's own item-type/field
 schema. 36 tools total — see [Tools](#tools) below for the full list.
 
+> Unofficial, community-maintained project. Not affiliated with, endorsed
+> by, or sponsored by the Corporation for Digital Scholarship (Zotero) —
+> see [Zotero's trademark policy](https://www.zotero.org/support/terms/trademark).
+
 ## Why this exists
 
 Read-only tools that match findings against a Zotero library (e.g. by

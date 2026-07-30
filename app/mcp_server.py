@@ -57,7 +57,7 @@ from mcp.server.auth.settings import (
     ClientRegistrationOptions,
     RevocationOptions,
 )
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Icon
 from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import (
@@ -113,6 +113,15 @@ _INSTRUCTIONS = (
     "filesystem."
 )
 
+_WEBSITE_URL = "https://herbertkokholm.github.io/zotero-mcp/"
+_ICONS = [
+    Icon(
+        src=f"{_WEBSITE_URL}icons/icon.svg",
+        mimeType="image/svg+xml",
+        sizes=["any"],
+    )
+]
+
 _oauth_provider: ZoteroMCPOAuthProvider | None = None
 _token_store: TokenStore | None = None
 
@@ -126,6 +135,8 @@ if _PORT:
     mcp = FastMCP(
         "zotero-mcp",
         instructions=_INSTRUCTIONS,
+        website_url=_WEBSITE_URL,
+        icons=_ICONS,
         host="0.0.0.0",
         port=int(_PORT),
         stateless_http=True,
@@ -138,7 +149,12 @@ if _PORT:
         ),
     )
 else:
-    mcp = FastMCP("zotero-mcp", instructions=_INSTRUCTIONS)
+    mcp = FastMCP(
+        "zotero-mcp",
+        instructions=_INSTRUCTIONS,
+        website_url=_WEBSITE_URL,
+        icons=_ICONS,
+    )
 
 
 if _PORT:
