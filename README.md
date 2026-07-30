@@ -192,13 +192,20 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 
 ## Status
 
-**v1.0** — deployed and in active use, with full CRUD coverage of the
+**v1.5** — deployed and in active use, with full CRUD coverage of the
 Zotero Web API's item/collection/tag/trash/saved-search/schema surface
 (36 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the
 server's public URL) — the OAuth flow described above prompts for your
 own Zotero Library ID/Type/API Key in-browser, no manually-configured
 headers needed, and no admin sign-up step.
+
+Listed in the official [MCP Registry](https://registry.modelcontextprotocol.io)
+as `dk.herbertkokholm.citecaddy/cite-caddy` — metadata lives in
+[`server.json`](server.json), published via `mcp-publisher` and DNS-verified
+against `citecaddy.herbertkokholm.dk`. Not (yet) part of GitHub's separate,
+manually-curated [github.com/mcp](https://github.com/mcp) directory, which
+doesn't sync automatically from the open registry.
 
 ## Contributing
 

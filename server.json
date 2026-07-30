@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "dk.herbertkokholm.citecaddy/cite-caddy",
+  "title": "Cite Caddy",
+  "description": "Remote MCP server for full read/write access to a Zotero library",
+  "repository": {
+    "url": "https://github.com/herbertkokholm/cite-caddy",
+    "source": "github"
+  },
+  "version": "1.5.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://citecaddy.herbertkokholm.dk/mcp"
+    }
+  ]
+}
