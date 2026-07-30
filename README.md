@@ -69,6 +69,15 @@ MCP_PUBLIC_URL          public HTTPS URL this server is reachable at
 MCP_DATA_DIR            where OAuth clients/tokens/tenants persist (default: ./.data)
 ```
 
+Optional in either mode:
+
+```
+MCP_WEBSITE_URL         public site reported as serverInfo.website_url; also used to
+                        build serverInfo.icons[0].src as MCP_WEBSITE_URL + "icons/icon.svg"
+                        (that file must actually be served there). Left unset, both
+                        fields are simply omitted.
+```
+
 ## Deployment
 
 Ships as its own Docker container (`docker-compose.yml`), meant to sit
