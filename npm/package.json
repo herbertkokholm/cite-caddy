@@ -1,0 +1,12 @@
+{
+  "name": "cite-caddy",
+  "version": "0.0.0",
+  "description": "Name reservation for Cite Caddy -- a remote MCP server bridging AI assistants to a Zotero library. No published code yet; see https://citecaddy.com.",
+  "license": "MIT",
+  "homepage": "https://citecaddy.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/herbertkokholm/cite-caddy.git"
+  },
+  "private": false
+}

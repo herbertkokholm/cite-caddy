@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Actions referenced in .github/workflows/*.yml (checkout, setup-python).
+  # Actions referenced in .github/workflows/*.yml (checkout, setup-python, setup-node).
   # Pinned by commit SHA, so these PRs bump the pin, not just a version tag.
   - package-ecosystem: "github-actions"
     directory: "/"
