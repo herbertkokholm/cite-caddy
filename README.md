@@ -131,50 +131,51 @@ access), so it can be revoked independently if it ever leaks.
 
 ## Tools
 
-Read-only: `search_items`, `get_item`, `list_collections`, `list_tags`,
-`list_trash`, `list_saved_searches`, `list_groups`, `list_item_types`,
-`list_item_fields`, `list_item_type_fields`, `list_item_creator_types`,
-`list_attachments`, `get_fulltext`, `download_attachment`, `list_notes`.
-`list_groups` lists the groups the configured API key's account belongs
-to; its `id` doubles as `target_library_id` (with
-`target_library_type="group"`) for `move_item_to_different_library`.
-`list_item_type_fields`/`list_item_creator_types` describe what
-`create_item`/`update_item` will actually accept for a given
-`item_type` -- check them instead of guessing when a validation error
-comes back. `search_items`' `query` defaults to Zotero's quick search
-(title/creator/year); pass `full_text=True` to also match the indexed
-content of attached files and notes (Zotero's `qmode="everything"`),
-requiring a non-empty `query`.
+36 tools total, grouped by risk (see "Key safety" above before using any
+Destructive tool). Tools marked **✓** under **Version** require the
+item's/collection's current Zotero `version` (from
+`search_items`/`get_item`/`list_collections`) as an argument and refuse
+the call if it's stale, rather than silently overwriting a concurrent
+change.
 
-Safe, key-preserving writes: `create_item`, `create_collection`,
-`create_saved_search`, `update_collection`, `update_item`,
-`add_tags`/`remove_tags`/`set_tags`, `rename_tag`,
-`add_to_collection`/`remove_from_collection`, `trash_item`,
-`restore_from_trash`, `upload_attachment`, `create_note`, `update_note`.
-`trash_item` is a reversible soft delete (undo with `restore_from_trash`)
--- unlike `delete_item_permanently` below, it doesn't break Word
-citations unless the item is later permanently deleted or the trash is
-emptied.
-
-Destructive (see "Key safety" above): `delete_item_permanently`,
-`move_item_to_different_library`, `delete_collection`, `delete_tag`,
-`delete_saved_search`. The first three require the item's/collection's
-current Zotero `version` (get it from
-`search_items`/`get_item`/`list_collections` first) and refuse the call if
-it doesn't match the server's current version, rather than silently
-overwriting a concurrent change. `delete_collection` cascades to any
-sub-collections (matching Zotero's own "Delete Collection" behavior) but
-never deletes the items filed in them. `rename_tag`/`delete_tag` act on
-every item in the library carrying that tag, not just one -- there's no
-per-tag version to check, since tags aren't standalone versioned entities
-in Zotero's API. `delete_saved_search` is destructive but low-risk: a
-saved search is just a stored filter, so deleting one never touches items
-or citations.
-
-Attachment file content (`upload_attachment`'s `content_base64` argument,
-`download_attachment`'s `content_base64` result) travels base64-encoded —
-this server is remote and has no access to the caller's local filesystem, so
-raw bytes can't be passed as a local path the way pyzotero itself expects.
+| Tool | Category | Version | Notes |
+|---|---|:---:|---|
+| `search_items` | Read-only | | `query` defaults to Zotero's quick search (title/creator/year); `full_text=True` also matches indexed content of attached files/notes (`qmode="everything"`), requires non-empty `query`. |
+| `get_item` | Read-only | | |
+| `list_collections` | Read-only | | |
+| `list_tags` | Read-only | | |
+| `list_trash` | Read-only | | |
+| `list_saved_searches` | Read-only | | |
+| `list_groups` | Read-only | | `id` doubles as `target_library_id` (with `target_library_type="group"`) for `move_item_to_different_library`. |
+| `list_item_types` | Read-only | | |
+| `list_item_fields` | Read-only | | |
+| `list_item_type_fields` | Read-only | | Check before `create_item`/`update_item` instead of guessing — what fields a given `item_type` accepts. |
+| `list_item_creator_types` | Read-only | | Same, for `creators` entries' `creatorType`. |
+| `list_attachments` | Read-only | | |
+| `get_fulltext` | Read-only | | |
+| `download_attachment` | Read-only | | Content returned as `content_base64` — server has no access to the caller's local filesystem. |
+| `list_notes` | Read-only | | |
+| `create_item` | Safe write | | |
+| `create_collection` | Safe write | | |
+| `create_saved_search` | Safe write | | |
+| `update_collection` | Safe write | ✓ | |
+| `update_item` | Safe write | ✓ | |
+| `add_tags` | Safe write | ✓ | |
+| `remove_tags` | Safe write | ✓ | |
+| `set_tags` | Safe write | ✓ | |
+| `rename_tag` | Safe write | | Library-wide — acts on every item carrying the tag, not just one; no per-tag version. Can block on large libraries: [#6](https://github.com/herbertkokholm/cite-caddy/issues/6). |
+| `add_to_collection` | Safe write | ✓ | |
+| `remove_from_collection` | Safe write | ✓ | |
+| `trash_item` | Safe write | ✓ | Reversible soft delete — undo with `restore_from_trash`; doesn't break Word citations unless later permanently deleted or the trash is emptied. |
+| `restore_from_trash` | Safe write | ✓ | |
+| `upload_attachment` | Safe write | | Content sent as `content_base64` — server has no access to the caller's local filesystem. |
+| `create_note` | Safe write | | |
+| `update_note` | Safe write | ✓ | |
+| `delete_item_permanently` | Destructive | ✓ | Breaks Word citations. |
+| `move_item_to_different_library` | Destructive | ✓ | Recreates the item under a brand-new key in the target library, then deletes the original — breaks Word citations. |
+| `delete_collection` | Destructive | ✓ | Cascades to sub-collections (matching Zotero's own "Delete Collection"); never deletes the items filed in them. |
+| `delete_tag` | Destructive | | Library-wide — acts on every item carrying the tag, not just one; no per-tag version. |
+| `delete_saved_search` | Destructive | | Low-risk — a saved search is just a stored filter, never touches items or citations. |
 
 ## Testing
 
@@ -206,6 +207,45 @@ as `dk.herbertkokholm.citecaddy/cite-caddy` — metadata lives in
 against `citecaddy.herbertkokholm.dk`. Not (yet) part of GitHub's separate,
 manually-curated [github.com/mcp](https://github.com/mcp) directory, which
 doesn't sync automatically from the open registry.
+
+## Known limitations
+
+Tracked gaps against the MCP [2026-07-28 specification](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+("stateless core, enterprise authorization, extensions framework"). None
+are currently exploitable or user-facing — each is either inert until an
+upstream `mcp` SDK change, or already mitigated — but are documented here
+so they're visibly known rather than silently absent.
+
+- **OAuth authorization-response `iss` param (RFC 9207) not sent.** The
+  spec hardens the OAuth flow against mix-up attacks by having the
+  authorization server include an `iss` parameter in the redirect back to
+  the client ([RFC 9207 §2.4](https://www.rfc-editor.org/rfc/rfc9207.html#section-2.4)),
+  which spec-compliant clients then validate. This server's `/login` flow
+  builds its final redirect by hand in `complete_login()`
+  ([`app/oauth_provider.py`](app/oauth_provider.py)) rather than through
+  the `mcp` SDK's built-in authorize handler, and currently omits `iss`.
+  Harmless today: the installed `mcp` SDK (`mcp>=2.0.0,<3` in
+  `pyproject.toml`) never advertises
+  `authorization_response_iss_parameter_supported` in this server's OAuth
+  metadata, so no compliant client requires it yet. Revisit if a future
+  SDK version turns that advertisement on by default.
+
+- **Dynamic Client Registration (RFC 7591) instead of CIMD.** The same
+  spec update formally deprecates Dynamic Client Registration in favor of
+  Client ID Metadata Documents (CIMD), though DCR remains functional for
+  backward compatibility. This server's client auto-provisioning
+  (`_FlexibleClientInformation`/`register_client`/`get_client` in
+  [`app/oauth_provider.py`](app/oauth_provider.py)) is built on DCR —
+  needed because some MCP clients (observed: Claude Desktop/claude.ai)
+  skip registration and send `/authorize` an unregistered `client_id`
+  directly (see that class's docstring). No action needed while the
+  installed SDK keeps DCR working without warning; will need a
+  CIMD-based replacement if/when that changes.
+
+- **`rename_tag` can block on large libraries** — tracked as
+  [#6](https://github.com/herbertkokholm/cite-caddy/issues/6); candidate
+  for the spec's new `tasks` extension once the installed SDK exposes
+  one.
 
 ## Contributing
 
