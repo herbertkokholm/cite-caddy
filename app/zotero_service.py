@@ -122,14 +122,27 @@ def _translate(
     return ZoteroApiError(str(exc))
 
 
-def _creator_name(creator: dict) -> str:
+def _creator_entry(creator: dict) -> dict:
+    """Mirrors the shape create_item/update_item accept for a single
+    `creators` entry, so callers can round-trip get_item/search_items
+    output straight back into an update_item call."""
+    creator_type = creator.get("creatorType", "")
     if creator.get("name"):
-        return creator["name"]
-    return " ".join(p for p in (creator.get("firstName"), creator.get("lastName")) if p)
+        return {"creatorType": creator_type, "name": creator["name"]}
+    return {
+        "creatorType": creator_type,
+        "firstName": creator.get("firstName", ""),
+        "lastName": creator.get("lastName", ""),
+    }
 
 
-def format_creators(creators: list | None) -> str:
-    return ", ".join(n for n in (_creator_name(c) for c in creators or []) if n)
+def format_creators(creators: list | None) -> list[dict]:
+    """Structured form of a raw Zotero creators list, preserving
+    creatorType (author vs. editor vs. translator etc.) and
+    firstName/lastName vs. single-field `name` -- collapsing both into an
+    undifferentiated name string (the old behavior) lost the distinction
+    between e.g. a proceedings' authors and its editors."""
+    return [_creator_entry(c) for c in creators or []]
 
 
 def _attachment_summary(item: dict) -> dict:

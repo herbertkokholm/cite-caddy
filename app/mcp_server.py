@@ -342,7 +342,12 @@ def search_items(
 
     Each result includes `key` and `version` -- pass both to update_item,
     add_tags/remove_tags/set_tags, add_to_collection/remove_from_collection,
-    delete_item_permanently, or move_item_to_different_library.
+    delete_item_permanently, or move_item_to_different_library. `creators`
+    is a list of {creatorType, firstName, lastName} (or {creatorType,
+    name} for single-field/institutional creators) entries, preserving
+    each creator's role (author, editor, seriesEditor, translator,
+    contributor, ...) -- the same shape create_item/update_item accept,
+    so it can be passed straight back in.
     """
     return get_service().search_items(
         query=query,
@@ -365,7 +370,9 @@ def search_items(
 def get_item(key: str) -> dict:
     """Fetch one item by key. Read-only. Use this to get an item's current
     `version` right before a mutating call, if you don't already have a
-    fresh one from search_items."""
+    fresh one from search_items. `creators` is a list of {creatorType,
+    firstName, lastName} (or {creatorType, name} for single-field/
+    institutional creators) entries -- see search_items' docstring."""
     return get_service().get_item(key)
 
 
@@ -381,7 +388,7 @@ def list_trash(limit: int = 25, start: int = 0) -> list[dict]:
     Zotero desktop app's "Move to Trash", or trash_item), but not yet
     permanently gone. Read-only. Each result's `key`/`version` can be
     passed to restore_from_trash. limit/start: pagination (default limit
-    25)."""
+    25). `creators` shape matches search_items/get_item."""
     return get_service().list_trash(limit=limit, start=start)
 
 
