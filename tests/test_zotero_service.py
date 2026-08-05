@@ -68,6 +68,95 @@ def test_list_collections(service, fake_zot):
     assert result[0]["name"] == "Papers"
 
 
+# ---- creators ---------------------------------------------------------------
+
+
+def test_get_item_creators_distinguishes_authors_and_editors(service, fake_zot):
+    item = fake_zot.seed_item(
+        "conferencePaper",
+        {
+            "creators": [
+                {"creatorType": "author", "firstName": "Debra", "lastName": "Nestel"},
+                {
+                    "creatorType": "editor",
+                    "firstName": "Margaret",
+                    "lastName": "Bearman",
+                },
+            ]
+        },
+    )
+
+    result = service.get_item(item["key"])
+
+    assert result["creators"] == [
+        {"creatorType": "author", "firstName": "Debra", "lastName": "Nestel"},
+        {"creatorType": "editor", "firstName": "Margaret", "lastName": "Bearman"},
+    ]
+
+
+def test_get_item_creators_institutional_single_field(service, fake_zot):
+    item = fake_zot.seed_item(
+        "report",
+        {"creators": [{"creatorType": "author", "name": "United Nations"}]},
+    )
+
+    result = service.get_item(item["key"])
+
+    assert result["creators"] == [{"creatorType": "author", "name": "United Nations"}]
+
+
+def test_get_item_creators_empty(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle")
+
+    result = service.get_item(item["key"])
+
+    assert result["creators"] == []
+
+
+def test_search_items_creators_matches_get_item_shape(service, fake_zot):
+    fake_zot.seed_item(
+        "book",
+        {
+            "title": "Many-Author Volume",
+            "creators": [
+                {
+                    "creatorType": "author",
+                    "firstName": f"First{i}",
+                    "lastName": f"Last{i}",
+                }
+                for i in range(15)
+            ],
+        },
+    )
+
+    [result] = service.search_items(query="Many-Author Volume")
+
+    assert len(result["creators"]) == 15
+    assert result["creators"][0] == {
+        "creatorType": "author",
+        "firstName": "First0",
+        "lastName": "Last0",
+    }
+
+
+def test_create_item_creators_round_trip_into_update_item(service, fake_zot):
+    created = service.create_item(
+        "book",
+        fields={"title": "Round Trip"},
+        creators=[
+            {"creatorType": "editor", "firstName": "Ada", "lastName": "Lovelace"}
+        ],
+    )
+
+    updated = service.update_item(
+        created["key"],
+        version=created["version"],
+        fields={"creators": created["creators"]},
+    )
+
+    assert updated["creators"] == created["creators"]
+
+
 # ---- saved searches --------------------------------------------------------
 
 
@@ -357,7 +446,9 @@ def test_create_item(service):
     )
     assert created["title"] == "New Paper"
     assert created["doi"] == "10.1/x"
-    assert created["creators"] == "Ada Lovelace"
+    assert created["creators"] == [
+        {"creatorType": "author", "firstName": "Ada", "lastName": "Lovelace"}
+    ]
     assert created["tags"] == ["ml"]
     assert created["key"]
 
@@ -388,7 +479,9 @@ def test_update_item_allows_creators_replace(service, fake_zot):
         },
     )
 
-    assert updated["creators"] == "B Two"
+    assert updated["creators"] == [
+        {"creatorType": "author", "firstName": "B", "lastName": "Two"}
+    ]
 
 
 def test_update_item_rejects_reserved_fields(service, fake_zot):

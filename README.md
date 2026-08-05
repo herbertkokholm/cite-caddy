@@ -140,11 +140,11 @@ change.
 
 | Tool | Category | Version | Notes |
 |---|---|:---:|---|
-| `search_items` | Read-only | | `query` defaults to Zotero's quick search (title/creator/year); `full_text=True` also matches indexed content of attached files/notes (`qmode="everything"`), requires non-empty `query`. |
-| `get_item` | Read-only | | |
+| `search_items` | Read-only | | `query` defaults to Zotero's quick search (title/creator/year); `full_text=True` also matches indexed content of attached files/notes (`qmode="everything"`), requires non-empty `query`. Each result's `creators` is a list of `{creatorType, firstName, lastName}` (or `{creatorType, name}` for single-field/institutional creators) entries — same shape `create_item`/`update_item` accept, preserving role (author vs. editor vs. translator, ...). |
+| `get_item` | Read-only | | `creators` shape as above. |
 | `list_collections` | Read-only | | |
 | `list_tags` | Read-only | | |
-| `list_trash` | Read-only | | |
+| `list_trash` | Read-only | | `creators` shape as above. |
 | `list_saved_searches` | Read-only | | |
 | `list_groups` | Read-only | | `id` doubles as `target_library_id` (with `target_library_type="group"`) for `move_item_to_different_library`. |
 | `list_item_types` | Read-only | | |
