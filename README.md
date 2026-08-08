@@ -228,7 +228,7 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 
 ## Status
 
-**v1.5** — deployed and in active use, with full CRUD coverage of the
+**v2.1** — deployed and in active use, with full CRUD coverage of the
 Zotero Web API's item/collection/tag/trash/saved-search/schema surface
 (36 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the
