@@ -91,3 +91,10 @@ class TokenStore:
         encrypted = dict(tenant)
         encrypted["api_key"] = self._fernet.encrypt(tenant["api_key"].encode()).decode()
         self.put("tenants", library_id, encrypted)
+
+    def tenant_count(self) -> int:
+        """Number of onboarded tenants -- just the count, not who they are,
+        so callers (e.g. app/mcp_server.py's `/status`) can report it
+        without exposing any library's identity."""
+        with self._lock:
+            return len(self._data["tenants"])

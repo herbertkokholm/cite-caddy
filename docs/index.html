@@ -633,6 +633,9 @@
             the token store, not kept in plaintext.</span></div>
         <div class="feat"><b>Tested against a fake</b><span>All read/write logic runs against an in-memory
             <code>FakeZotero</code> in tests — the suite never touches a live library.</span></div>
+        <div class="feat"><b>Public status endpoint</b><span><code>/status</code> (JSON) and <code>/status.html</code>
+            (small page) report uptime, onboarded-tenant count, and per-tool call/error totals — aggregate only,
+            no per-tenant data.</span></div>
       </div>
     </section>
 

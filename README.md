@@ -131,6 +131,39 @@ key and target host/port/user — see the workflow file for the full list.
 Use a dedicated deploy key (not whatever key you use for direct/manual
 access), so it can be revoked independently if it ever leaks.
 
+## Monitoring
+
+Three unauthenticated GET endpoints, HTTP mode only (all require `$PORT`,
+same as `/login`):
+
+- **`/healthz`** — plain `200 OK`, for a load balancer/uptime check.
+- **`/status`** — JSON snapshot of aggregate, process-level activity:
+
+  ```json
+  {
+    "version": "2.1.0",
+    "uptime_seconds": 41213,
+    "tenants": 7,
+    "tool_calls": {"search_items": 512, "add_tags": 41},
+    "tool_errors": {"add_tags": 2}
+  }
+  ```
+
+  `tenants` is `TokenStore.tenant_count()` — just the number of onboarded
+  Zotero libraries. `tool_calls`/`tool_errors` are per-tool-name counts
+  across *all* tenants combined, recorded by a `tools/call` middleware
+  (`_track_tool_call` in `app/mcp_server.py`). Deliberately no per-tenant or
+  per-library breakdown anywhere in this response — that's what keeps it
+  safe to leave unauthenticated, unlike the 36 tools themselves. Counters
+  live in `app/metrics.py`, in-memory only: they reset to zero on every
+  restart/redeploy, same as this isn't a metrics/analytics system, just a
+  lightweight "is it up and roughly how busy is it" signal.
+- **`/status.html`** — same data as `/status`, rendered as a small page
+  (name + icon, one table of version/uptime/tenants, one table of
+  per-tool call/error counts) for a human checking in a browser rather
+  than a script. Icon only renders when `MCP_WEBSITE_URL` is set, same
+  as `/login`'s.
+
 ## Tools
 
 36 tools total, grouped by risk (see "Key safety" above before using any
@@ -195,7 +228,7 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 
 ## Status
 
-**v1.5** — deployed and in active use, with full CRUD coverage of the
+**v2.1** — deployed and in active use, with full CRUD coverage of the
 Zotero Web API's item/collection/tag/trash/saved-search/schema surface
 (36 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the

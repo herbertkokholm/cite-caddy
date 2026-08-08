@@ -58,6 +58,10 @@ def http_mcp_server(tmp_path, monkeypatch):
 
     sys.modules.pop("app.mcp_server", None)
     module = importlib.import_module("app.mcp_server")
+    # app.metrics is a long-lived module (re-importing app.mcp_server above
+    # reuses the same one -- see its reset() docstring), so tests get a
+    # clean slate explicitly instead of relying on a fresh import.
+    module.metrics.reset()
 
     import app.oauth_provider as oauth_provider_mod
 
@@ -86,6 +90,24 @@ def _register_client(client: TestClient) -> dict:
     )
     assert resp.status_code == 201, resp.text
     return resp.json()
+
+
+def _login_page_response(client: TestClient):
+    client_info = _register_client(client)
+    _, challenge = _code_verifier_and_challenge()
+    authorize_resp = client.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_info["client_id"],
+            "redirect_uri": "https://claude.example/callback",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "state": "xyz",
+        },
+        follow_redirects=False,
+    )
+    return client.get(authorize_resp.headers["location"])
 
 
 def test_healthz_is_public(client):
@@ -235,3 +257,160 @@ def test_full_oauth_flow_yields_working_bearer_token(client):
     # Not 401 -- the token authenticated; 406 is MCPServer's own response to a
     # plain GET without the streamable-http Accept headers, expected here.
     assert mcp_resp.status_code != 401
+
+
+# ---- /status ----------------------------------------------------------
+
+
+def test_status_is_public(client):
+    resp = client.get("/status")
+    assert resp.status_code == 200
+
+
+def test_status_baseline_shape_before_any_activity(client):
+    body = client.get("/status").json()
+    assert body["tenants"] == 0
+    assert body["tool_calls"] == {}
+    assert body["tool_errors"] == {}
+    assert body["uptime_seconds"] >= 0
+    assert body["version"]
+
+
+def test_status_reports_onboarded_tenant_count(http_mcp_server, client):
+    http_mcp_server._token_store.put_tenant(
+        "123", {"library_id": "123", "library_type": "user", "api_key": "s3cr3t"}
+    )
+
+    assert client.get("/status").json()["tenants"] == 1
+
+
+# ---- tools/call tracking middleware ------------------------------------
+
+
+def _tool_call_ctx(name: str):
+    from mcp.server.context import ServerRequestContext
+
+    return ServerRequestContext(
+        session=None,
+        lifespan_context={},
+        protocol_version="2026-07-28",
+        method="tools/call",
+        params={"name": name},
+    )
+
+
+def test_track_tool_call_is_registered_on_the_server(http_mcp_server):
+    assert http_mcp_server._track_tool_call in http_mcp_server.mcp.middleware
+
+
+async def test_track_tool_call_counts_success(http_mcp_server):
+    async def call_next(ctx):
+        return {"ok": True}
+
+    await http_mcp_server._track_tool_call(_tool_call_ctx("search_items"), call_next)
+
+    assert http_mcp_server.metrics.tool_calls["search_items"] == 1
+    assert http_mcp_server.metrics.tool_errors["search_items"] == 0
+
+
+async def test_track_tool_call_counts_error_and_reraises(http_mcp_server):
+    async def call_next(ctx):
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await http_mcp_server._track_tool_call(_tool_call_ctx("add_tags"), call_next)
+
+    assert http_mcp_server.metrics.tool_calls["add_tags"] == 1
+    assert http_mcp_server.metrics.tool_errors["add_tags"] == 1
+
+
+async def test_track_tool_call_ignores_non_tool_methods(http_mcp_server):
+    from mcp.server.context import ServerRequestContext
+
+    seen = []
+
+    async def call_next(ctx):
+        seen.append(ctx.method)
+
+    ctx = ServerRequestContext(
+        session=None,
+        lifespan_context={},
+        protocol_version="2026-07-28",
+        method="initialize",
+        params=None,
+    )
+    await http_mcp_server._track_tool_call(ctx, call_next)
+
+    assert seen == ["initialize"]
+    assert sum(http_mcp_server.metrics.tool_calls.values()) == 0
+
+
+async def test_status_reflects_tracked_tool_calls(http_mcp_server, client):
+    async def call_next(ctx):
+        return {"ok": True}
+
+    await http_mcp_server._track_tool_call(_tool_call_ctx("search_items"), call_next)
+    await http_mcp_server._track_tool_call(_tool_call_ctx("search_items"), call_next)
+
+    body = client.get("/status").json()
+    assert body["tool_calls"] == {"search_items": 2}
+    assert body["tool_errors"] == {}
+
+
+# ---- /status.html -------------------------------------------------------
+
+
+def test_status_html_is_public(client):
+    resp = client.get("/status.html")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+def test_status_html_shows_name_table_and_no_icon_by_default(client):
+    body = client.get("/status.html").text
+    assert "Cite Caddy" in body
+    assert "<table>" in body
+    assert "icon.svg" not in body
+
+
+def test_status_html_shows_placeholder_before_any_activity(client):
+    assert "No tool calls yet." in client.get("/status.html").text
+
+
+def test_status_html_shows_icon_when_website_url_configured(
+    http_mcp_server, client, monkeypatch
+):
+    monkeypatch.setattr(http_mcp_server, "_WEBSITE_URL", "https://example.test/")
+
+    body = client.get("/status.html").text
+
+    assert '<img src="https://example.test/icons/icon.svg"' in body
+
+
+async def test_status_html_lists_tracked_tool_calls(http_mcp_server, client):
+    async def call_next(ctx):
+        return {"ok": True}
+
+    await http_mcp_server._track_tool_call(_tool_call_ctx("search_items"), call_next)
+
+    body = client.get("/status.html").text
+
+    assert "search_items" in body
+    assert "No tool calls yet." not in body
+
+
+# ---- login page icon -----------------------------------------------------
+
+
+def test_login_page_omits_icon_by_default(client):
+    assert "icon.svg" not in _login_page_response(client).text
+
+
+def test_login_page_shows_icon_when_website_url_configured(
+    http_mcp_server, client, monkeypatch
+):
+    monkeypatch.setattr(http_mcp_server, "_WEBSITE_URL", "https://example.test/")
+
+    body = _login_page_response(client).text
+
+    assert '<img src="https://example.test/icons/icon.svg"' in body
