@@ -105,3 +105,30 @@ def test_tenant_decrypt_requires_matching_fernet_key(tmp_path):
     other_key_store = _store(path, fernet_key=Fernet.generate_key().decode())
     with pytest.raises(InvalidToken):
         other_key_store.get_tenant("123")
+
+
+def test_tenant_count_starts_at_zero(tmp_path):
+    store = _store(str(tmp_path / "store.json"))
+    assert store.tenant_count() == 0
+
+
+def test_tenant_count_reflects_onboarded_tenants(tmp_path):
+    store = _store(str(tmp_path / "store.json"))
+    store.put_tenant(
+        "123", {"library_id": "123", "library_type": "user", "api_key": "a"}
+    )
+    store.put_tenant(
+        "456", {"library_id": "456", "library_type": "group", "api_key": "b"}
+    )
+    assert store.tenant_count() == 2
+
+
+def test_tenant_count_upsert_does_not_double_count(tmp_path):
+    store = _store(str(tmp_path / "store.json"))
+    store.put_tenant(
+        "123", {"library_id": "123", "library_type": "user", "api_key": "old"}
+    )
+    store.put_tenant(
+        "123", {"library_id": "123", "library_type": "user", "api_key": "new"}
+    )
+    assert store.tenant_count() == 1

@@ -61,15 +61,18 @@ from mcp.server.auth.settings import (
     ClientRegistrationOptions,
     RevocationOptions,
 )
+from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.types import Icon, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
+    JSONResponse,
     PlainTextResponse,
     RedirectResponse,
     Response,
 )
 
+from app import metrics
 from app.config import HttpSettings, Settings, load_dotenv
 from app.oauth_provider import (
     CiteCaddyOAuthProvider,
@@ -169,6 +172,85 @@ if _PORT:
     async def healthz(request: Request) -> PlainTextResponse:
         return PlainTextResponse("OK")
 
+    async def _track_tool_call(
+        ctx: ServerRequestContext[Any, Any], call_next: CallNext
+    ) -> HandlerResult:
+        """Records every `tools/call` in app/metrics.py, by tool name only
+        -- no tenant/library identity -- so `/status` below can report
+        aggregate call/error counts. Registered on `mcp.middleware`, which
+        wraps every inbound MCP message, so non-tool methods (initialize,
+        list_tools, ...) are passed through untouched."""
+        if ctx.method != "tools/call":
+            return await call_next(ctx)
+        name = (ctx.params or {}).get("name", "unknown")
+        metrics.tool_calls[name] += 1
+        try:
+            return await call_next(ctx)
+        except Exception:
+            metrics.tool_errors[name] += 1
+            raise
+
+    mcp.middleware.append(_track_tool_call)
+
+    def _status_data() -> dict[str, Any]:
+        return {
+            "version": _pkg_version("cite-caddy"),
+            "uptime_seconds": metrics.uptime_seconds(),
+            "tenants": _token_store.tenant_count() if _token_store else None,
+            "tool_calls": dict(metrics.tool_calls),
+            "tool_errors": dict(metrics.tool_errors),
+        }
+
+    @mcp.custom_route("/status", methods=["GET"])
+    async def status(request: Request) -> JSONResponse:
+        return JSONResponse(_status_data())
+
+    def _status_page(data: dict[str, Any]) -> str:
+        icon_html = ""
+        if _WEBSITE_URL:
+            icon_src = html.escape(f"{_WEBSITE_URL}icons/icon.svg")
+            icon_html = f'<img src="{icon_src}" alt="" width="24" height="24">\n  '
+
+        tool_names = sorted(set(data["tool_calls"]) | set(data["tool_errors"]))
+        if tool_names:
+            tool_rows = "\n".join(
+                f"  <tr><td>{html.escape(name)}</td>"
+                f"<td>{data['tool_calls'].get(name, 0)}</td>"
+                f"<td>{data['tool_errors'].get(name, 0)}</td></tr>"
+                for name in tool_names
+            )
+        else:
+            tool_rows = (
+                '  <tr><td colspan="3" class="hint">No tool calls yet.</td></tr>'
+            )
+
+        tenants = data["tenants"] if data["tenants"] is not None else "n/a"
+        return f"""<!doctype html>
+<title>Cite Caddy status</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; max-width: 28rem; margin: 4rem auto; }}
+  h1 {{ display: flex; align-items: center; gap: 0.5rem; }}
+  img {{ border-radius: 6px; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 1.5rem 0; }}
+  th, td {{ text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #ddd; }}
+  .hint {{ color: #666; font-size: 0.9em; }}
+</style>
+<h1>{icon_html}Cite Caddy</h1>
+<table>
+  <tr><th>Version</th><td>{html.escape(str(data["version"]))}</td></tr>
+  <tr><th>Uptime</th><td>{data["uptime_seconds"]}s</td></tr>
+  <tr><th>Tenants</th><td>{tenants}</td></tr>
+</table>
+<table>
+  <tr><th>Tool</th><th>Calls</th><th>Errors</th></tr>
+{tool_rows}
+</table>
+"""
+
+    @mcp.custom_route("/status.html", methods=["GET"])
+    async def status_html(request: Request) -> HTMLResponse:
+        return HTMLResponse(_status_page(_status_data()))
+
     def _login_page(
         login_id: str,
         error: str | None = None,
@@ -179,16 +261,24 @@ if _PORT:
         selected = {
             t: " selected" if t == library_type else "" for t in ("user", "group")
         }
+        icon_html = ""
+        if _WEBSITE_URL:
+            icon_src = html.escape(f"{_WEBSITE_URL}icons/icon.svg")
+            icon_html = f'<img src="{icon_src}" alt="" width="48" height="48">\n  '
         return f"""<!doctype html>
 <title>Cite Caddy login</title>
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 24rem; margin: 4rem auto; }}
+  header {{ text-align: center; }}
+  header img {{ border-radius: 10px; }}
   input, select {{ display: block; width: 100%; margin: 0.5rem 0 1rem; padding: 0.5rem; box-sizing: border-box; }}
   button {{ padding: 0.5rem 1.5rem; }}
   .error {{ color: #b00020; }}
   .hint {{ color: #666; font-size: 0.9em; }}
 </style>
-<h1>Cite Caddy</h1>
+<header>
+  {icon_html}<h1>Cite Caddy</h1>
+</header>
 <p>Connect this MCP client to your own Zotero library. Signing in with a
 valid Zotero API key both grants access and registers your library with
 this server -- no separate sign-up.</p>
