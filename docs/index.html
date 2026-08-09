@@ -639,6 +639,12 @@
         <div class="feat"><b>Public status endpoint</b><span><code>/status</code> (JSON) and <code>/status.html</code>
             (small page) report uptime, onboarded-tenant count, and per-tool call/error totals — aggregate only,
             no per-tenant data.</span></div>
+        <div class="feat"><b>Server-card discovery</b><span><code>/.well-known/mcp/server-card.json</code> lists
+            identity, auth requirements, and the full tool registry with schemas, generated live on every request.
+            A pragmatic approximation of <a href="https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127" target="_blank" rel="noopener">SEP-2127</a>
+            ("MCP Server Cards"), which is <strong>not yet a ratified MCP standard</strong> — added because
+            <a href="https://smithery.ai/docs/build/publish" target="_blank" rel="noopener">Smithery's publish flow</a>
+            documents this exact path as a fallback for servers behind an OAuth wall.</span></div>
       </div>
     </section>
 

@@ -187,6 +187,52 @@ if _PORT:
     async def healthz(request: Request) -> PlainTextResponse:
         return PlainTextResponse("OK")
 
+    def _first_paragraph(text: str) -> str:
+        """Collapses a tool docstring down to its first paragraph, with
+        internal whitespace/newlines flattened to single spaces -- used
+        for /.well-known/mcp/server-card.json below, where the full
+        multi-paragraph docstring (meant for an MCP client's model, which
+        reads the whole thing) would be needlessly verbose for a
+        pre-connection discovery summary."""
+        paragraph = text.strip().split("\n\n", 1)[0]
+        return " ".join(paragraph.split())
+
+    async def _server_card_data() -> dict[str, Any]:
+        tools = await mcp.list_tools()
+        return {
+            "serverInfo": {"name": "Cite Caddy", "version": _pkg_version("cite-caddy")},
+            "authentication": {"required": True, "schemes": ["oauth2"]},
+            "tools": [
+                {
+                    "name": t.name,
+                    "description": _first_paragraph(t.description or ""),
+                    "inputSchema": t.model_dump(mode="json", by_alias=True)[
+                        "inputSchema"
+                    ],
+                }
+                for t in tools
+            ],
+            "resources": [],
+            "prompts": [],
+        }
+
+    @mcp.custom_route("/.well-known/mcp/server-card.json", methods=["GET"])
+    async def server_card(request: Request) -> JSONResponse:
+        """A pragmatic approximation of SEP-2127 ("MCP Server Cards -- HTTP
+        Server Discovery"), which is NOT a ratified part of the MCP spec as
+        of this writing -- SEP-2127 (github.com/modelcontextprotocol/
+        modelcontextprotocol/pull/2127, superseding the withdrawn SEP-1649)
+        is still an open, unmerged proposal, and even its own well-known
+        path has changed between drafts (some revisions use
+        `.well-known/ai-catalog.json` instead of this one) -- it is NOT a
+        claim of spec compliance, and the path/shape here may need to change
+        if/when SEP-2127 (or a successor) actually ratifies with a different
+        contract. Generated live from mcp.list_tools() on every request
+        rather than a static file, so it can't drift out of sync with the real
+        tool registry.
+        """
+        return JSONResponse(await _server_card_data())
+
     async def _track_tool_call(
         ctx: ServerRequestContext[Any, Any], call_next: CallNext
     ) -> HandlerResult:

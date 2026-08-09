@@ -157,7 +157,7 @@ access), so it can be revoked independently if it ever leaks.
 
 ## Monitoring
 
-Three unauthenticated GET endpoints, HTTP mode only (all require `$PORT`,
+Four unauthenticated GET endpoints, HTTP mode only (all require `$PORT`,
 same as `/login`):
 
 - **`/healthz`** — plain `200 OK`, for a load balancer/uptime check.
@@ -187,6 +187,18 @@ same as `/login`):
   per-tool call/error counts) for a human checking in a browser rather
   than a script. Icon only renders when `MCP_WEBSITE_URL` is set, same
   as `/login`'s.
+- **`/.well-known/mcp/server-card.json`** — a pre-connection discovery
+  document (server identity, auth requirements, and the full tool list
+  with schemas), generated live from the actual tool registry on every
+  request so it can't drift out of sync. **Not a ratified standard**: this
+  is a pragmatic approximation of
+  [SEP-2127](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127)
+  ("MCP Server Cards — HTTP Server Discovery", superseding the withdrawn
+  SEP-1649), which is still an open, unmerged proposal as of this
+  writing — even its own well-known path has changed between drafts (some
+  revisions use `.well-known/ai-catalog.json` instead) — it's not a general
+  claim of spec compliance, and may need to change if/when SEP-2127 (or a
+  successor) actually ratifies with a different contract.
 
 ## Tools
 
@@ -255,7 +267,7 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 
 ## Status
 
-**v2.2** — deployed and in active use, with full CRUD coverage of the
+**v2.3** — deployed and in active use, with full CRUD coverage of the
 Zotero Web API's item/collection/tag/trash/saved-search/schema surface
 (39 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the

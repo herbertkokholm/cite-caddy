@@ -88,6 +88,21 @@ instead of re-running it, which matters most for multi-step operations
 where a retry after a partial failure would otherwise repeat side effects
 that already happened (see README's "Idempotency" section).
 
+## Discovery endpoint (server-card.json)
+
+`/.well-known/mcp/server-card.json` (in `app/mcp_server.py`, HTTP mode only)
+is a pragmatic approximation of
+[SEP-2127](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127)
+("MCP Server Cards") - see README's "Monitoring" section for the full rationale. 
+SEP-2127 is **not ratified** and still evolving (its own well-known path has 
+changed between drafts) — if it or a successor proposal lands with a different path 
+or shape, update this route (and the README/docs/index.html callouts pointing
+at it) to match, rather than trying to support multiple contracts at once.
+
+Generated live from `mcp.list_tools()` on every request (see
+`_server_card_data()`) rather than a static file, so it can't drift out of
+sync with the real tool registry — keep it that way if you touch this code.
+
 ## Data and secrets
 
 Real Zotero/OAuth credentials belong in `.env` (gitignored) locally, or

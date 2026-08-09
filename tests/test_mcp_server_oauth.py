@@ -284,6 +284,40 @@ def test_status_reports_onboarded_tenant_count(http_mcp_server, client):
     assert client.get("/status").json()["tenants"] == 1
 
 
+# ---- /.well-known/mcp/server-card.json -----------------------------------
+
+
+def test_server_card_is_public(client):
+    resp = client.get("/.well-known/mcp/server-card.json")
+    assert resp.status_code == 200
+
+
+def test_server_card_shape(client):
+    body = client.get("/.well-known/mcp/server-card.json").json()
+
+    assert body["serverInfo"]["name"] == "Cite Caddy"
+    assert body["serverInfo"]["version"]
+    assert body["authentication"] == {"required": True, "schemes": ["oauth2"]}
+    assert body["resources"] == []
+    assert body["prompts"] == []
+
+    tool_names = {t["name"] for t in body["tools"]}
+    assert "search_items" in tool_names
+    assert "update_publication_status" in tool_names
+    assert "export_bibliography" in tool_names
+    assert len(body["tools"]) == 39
+
+
+def test_server_card_tool_entries_have_no_multi_paragraph_descriptions(client):
+    body = client.get("/.well-known/mcp/server-card.json").json()
+
+    search_items = next(t for t in body["tools"] if t["name"] == "search_items")
+    assert search_items["description"] == "Search the Zotero library. Read-only."
+    assert "\n" not in search_items["description"]
+    assert "inputSchema" in search_items
+    assert search_items["inputSchema"]["type"] == "object"
+
+
 # ---- tools/call tracking middleware ------------------------------------
 
 
