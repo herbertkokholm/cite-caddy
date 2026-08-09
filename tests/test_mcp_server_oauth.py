@@ -368,6 +368,15 @@ def test_server_card_tool_entries_include_output_schema_and_annotations(client):
     assert delete_item["annotations"]["destructiveHint"] is True
 
 
+def test_server_card_omits_absent_fields_instead_of_emitting_null(client):
+    body = client.get("/.well-known/mcp/server-card.json").json()
+
+    get_item = next(t for t in body["tools"] if t["name"] == "get_item")
+    assert "outputSchema" not in get_item
+    assert "destructiveHint" not in get_item["annotations"]
+    assert "idempotentHint" not in get_item["annotations"]
+
+
 # ---- tools/call tracking middleware ------------------------------------
 
 

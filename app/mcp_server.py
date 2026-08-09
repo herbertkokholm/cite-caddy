@@ -202,15 +202,22 @@ if _PORT:
         -- includes outputSchema/annotations because every tool here
         already has both via its @mcp.tool() registration, so omitting
         them would just be throwing away metadata that's already sitting
-        on `t`."""
-        d = t.model_dump(mode="json", by_alias=True)
-        return {
+        on `t`. exclude_none matches the SDK's own tools/list serialization
+        (mcp/server/lowlevel/server.py) -- fields a tool doesn't have (e.g.
+        no outputSchema, or an annotation hint left unset) are left out of
+        the JSON entirely rather than emitted as an explicit `null`, which
+        a strict client-side schema validator could reject."""
+        d = t.model_dump(mode="json", by_alias=True, exclude_none=True)
+        entry: dict[str, Any] = {
             "name": d["name"],
             "description": _first_paragraph(d.get("description") or ""),
             "inputSchema": d["inputSchema"],
-            "outputSchema": d.get("outputSchema"),
-            "annotations": d.get("annotations"),
         }
+        if "outputSchema" in d:
+            entry["outputSchema"] = d["outputSchema"]
+        if "annotations" in d:
+            entry["annotations"] = d["annotations"]
+        return entry
 
     async def _server_card_data() -> dict[str, Any]:
         tools = await mcp.list_tools()
