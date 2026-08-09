@@ -118,6 +118,10 @@ def test_schema_introspection_tools(fake_service):
         "creator_type": "author",
         "localized": "Author",
     } in mcp_server.list_item_creator_types("book")
+    assert {
+        "field": "firstName",
+        "localized": "First Name",
+    } in mcp_server.list_creator_fields()
 
 
 def test_trash_tools(fake_service):

@@ -225,6 +225,11 @@ def test_list_item_creator_types(service):
     assert {"creator_type": "author", "localized": "Author"} in result
 
 
+def test_list_creator_fields(service):
+    result = service.list_creator_fields()
+    assert {"field": "firstName", "localized": "First Name"} in result
+
+
 # ---- trash ---------------------------------------------------------------
 
 

@@ -498,3 +498,10 @@ class FakeZotero:
             {"creatorType": "author", "localized": "Author"},
             {"creatorType": "editor", "localized": "Editor"},
         ]
+
+    def creator_fields(self, **kwargs: Any) -> list[dict]:
+        return [
+            {"field": "firstName", "localized": "First Name"},
+            {"field": "lastName", "localized": "Last Name"},
+            {"field": "name", "localized": "Name"},
+        ]

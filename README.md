@@ -186,6 +186,7 @@ change.
 | `list_item_fields` | Read-only | | |
 | `list_item_type_fields` | Read-only | | Check before `create_item`/`update_item` instead of guessing — what fields a given `item_type` accepts. |
 | `list_item_creator_types` | Read-only | | Same, for `creators` entries' `creatorType`. |
+| `list_creator_fields` | Read-only | | Name-shape fields (`firstName`, `lastName`, `name`, ...) valid on a `creators` entry itself — not the same as `list_item_creator_types` (roles). |
 | `list_attachments` | Read-only | | |
 | `get_fulltext` | Read-only | | |
 | `download_attachment` | Read-only | | Content returned as `content_base64` — server has no access to the caller's local filesystem. |

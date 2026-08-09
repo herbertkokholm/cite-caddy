@@ -369,6 +369,17 @@ class ZoteroService:
             {"creator_type": c["creatorType"], "localized": c["localized"]} for c in raw
         ]
 
+    def list_creator_fields(self) -> list[dict]:
+        """List the name-shape fields Zotero recognizes on a `creators`
+        entry (e.g. "firstName", "lastName", "name") -- not the same as
+        list_item_creator_types, which lists creatorType *roles* (author,
+        editor, ...) rather than name fields. Read-only."""
+        try:
+            raw = self.zot.creator_fields()
+        except Exception as exc:
+            raise _translate(exc) from exc
+        return [{"field": f["field"], "localized": f["localized"]} for f in raw]
+
     # ---- attachments & fulltext (read) ----------------------------------
 
     def list_attachments(self, item_key: str) -> list[dict]:

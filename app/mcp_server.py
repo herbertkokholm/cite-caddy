@@ -112,7 +112,10 @@ _INSTRUCTIONS = (
     "describe what create_item/update_item will actually accept for a "
     "given item_type -- check them instead of guessing when a create/"
     "update call raises a validation error, or before constructing "
-    "fields/creators for an unfamiliar item_type. Attachment file "
+    "fields/creators for an unfamiliar item_type. list_creator_fields "
+    "lists the name-shape fields (firstName, lastName, name, ...) valid "
+    "on a creators entry itself -- not the same as list_item_creator_types, "
+    "which lists creatorType roles (author, editor, ...). Attachment file "
     "content travels as base64 (upload_attachment's content_base64, "
     "download_attachment's content_base64 in the result) since this "
     "server runs remotely with no access to the caller's local "
@@ -582,6 +585,22 @@ def list_item_creator_types(item_type: str) -> list[dict]:
     one item type -- for create_item/update_item's `creators` entries,
     e.g. {"creatorType": "author", ...}. Read-only."""
     return get_service().list_item_creator_types(item_type)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="List Zotero Creator Fields",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def list_creator_fields() -> list[dict]:
+    """List the name-shape fields Zotero recognizes on a `creators` entry
+    (e.g. "firstName", "lastName", "name") -- for building creators
+    entries in create_item/update_item's `creators` argument. Distinct
+    from list_item_creator_types, which lists creatorType *roles*
+    (author, editor, ...) rather than name fields. Read-only."""
+    return get_service().list_creator_fields()
 
 
 @mcp.tool(
