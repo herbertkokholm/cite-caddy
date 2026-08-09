@@ -119,7 +119,16 @@ _INSTRUCTIONS = (
     "content travels as base64 (upload_attachment's content_base64, "
     "download_attachment's content_base64 in the result) since this "
     "server runs remotely with no access to the caller's local "
-    "filesystem."
+    "filesystem. delete_item_permanently, delete_collection, delete_tag, "
+    "delete_saved_search, move_item_to_different_library, and "
+    "update_publication_status all accept an optional idempotency_key: "
+    "reuse the same key when retrying a call after a lost/ambiguous "
+    "response and the original outcome (success or error) is replayed "
+    "instead of running against Zotero again -- use a fresh key per "
+    "distinct request, not one key for every call. "
+    "update_publication_status updates an item's fields (and, uniquely, "
+    "its item_type) in place when a preprint is formally published -- "
+    "prefer it (or update_item) over delete+recreate."
 )
 
 _WEBSITE_URL = os.environ.get("MCP_WEBSITE_URL")
@@ -909,6 +918,56 @@ def update_item(key: str, version: int, fields: dict[str, Any]) -> dict:
 
 @mcp.tool(
     annotations=ToolAnnotations(
+        title="Update Zotero Item Publication Status",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+def update_publication_status(
+    key: str,
+    version: int,
+    fields: dict[str, Any],
+    item_type: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict:
+    """Update an item in place to reflect that a preprint has been
+    formally published -- e.g. an arXiv preprint that just received a
+    journal DOI. Same key-preserving patch as update_item (Word citations
+    keep working) -- prefer this or update_item over deleting and
+    recreating the item whenever a preprint's status changes.
+
+    Unlike update_item, `item_type` may also be passed to change the
+    item's Zotero type (e.g. "preprint" -> "journalArticle") --
+    update_item forbids that because it changes which fields are valid;
+    this is the one tool where that's the deliberate point of the call.
+
+    fields: same rules as update_item -- bibliographic fields such as DOI,
+        url, date, publicationTitle, volume, issue, pages. May NOT include
+        tags/collections/itemType/key/version -- use the dedicated tools
+        for tags/collections, and item_type (not fields["itemType"]) to
+        change the item type.
+    item_type: new Zotero item type (see list_item_types); omit to leave
+        it unchanged.
+    version: the item's current version (from search_items/get_item) --
+        refused if stale, same as update_item.
+    idempotency_key: an opaque string you generate once per logical
+        request. If a call with this exact key and these exact arguments
+        already completed -- success OR error -- that same outcome is
+        replayed instead of running anything against Zotero again, so
+        retrying after a lost response (e.g. a timeout) can't turn one
+        edit into two. Reusing a key with DIFFERENT arguments raises an
+        error instead of silently returning the old result -- use a fresh
+        key per distinct request.
+    """
+    return get_service().update_publication_status(
+        key, version, fields, item_type=item_type, idempotency_key=idempotency_key
+    )
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
         title="Update Item Note",
         readOnlyHint=False,
         destructiveHint=False,
@@ -1037,7 +1096,9 @@ def remove_from_collection(key: str, version: int, collection_key: str) -> dict:
         openWorldHint=True,
     )
 )
-def delete_item_permanently(key: str, version: int) -> dict:
+def delete_item_permanently(
+    key: str, version: int, idempotency_key: str | None = None
+) -> dict:
     """DESTRUCTIVE -- permanently deletes the item from its library. Cannot
     be undone through this server.
 
@@ -1051,8 +1112,15 @@ def delete_item_permanently(key: str, version: int) -> dict:
     the delete is refused if this doesn't match the server's current
     version, so a concurrent edit elsewhere isn't silently discarded along
     with the item.
+    idempotency_key: optional opaque string, generated once per logical
+    request. If a call with this exact key and these exact arguments
+    already completed -- success OR error -- that same outcome is
+    replayed instead of deleting (or trying to delete) anything again, so
+    retrying after a lost response can't do this twice. Reusing a key
+    with different arguments raises an error instead of silently
+    returning the old result.
     """
-    return get_service().delete_item(key, version)
+    return get_service().delete_item(key, version, idempotency_key=idempotency_key)
 
 
 @mcp.tool(
@@ -1064,7 +1132,7 @@ def delete_item_permanently(key: str, version: int) -> dict:
         openWorldHint=True,
     )
 )
-def delete_tag(tag: str) -> dict:
+def delete_tag(tag: str, idempotency_key: str | None = None) -> dict:
     """DESTRUCTIVE -- permanently removes this tag from every item in the
     library that carries it (not one item -- see remove_tags for that).
     Cannot be undone through this server.
@@ -1072,8 +1140,12 @@ def delete_tag(tag: str) -> dict:
     Unlike delete_item_permanently/delete_collection, this has no
     caller-supplied version to check -- Zotero's tag-delete endpoint is
     gated on the library's own version internally.
+    idempotency_key: optional opaque string; if a call with this exact
+    key and tag already completed, that same outcome is replayed instead
+    of running against Zotero again -- see delete_item_permanently's
+    docstring for the full explanation.
     """
-    return get_service().delete_tag(tag)
+    return get_service().delete_tag(tag, idempotency_key=idempotency_key)
 
 
 @mcp.tool(
@@ -1085,7 +1157,9 @@ def delete_tag(tag: str) -> dict:
         openWorldHint=True,
     )
 )
-def delete_collection(key: str, version: int) -> dict:
+def delete_collection(
+    key: str, version: int, idempotency_key: str | None = None
+) -> dict:
     """DESTRUCTIVE -- permanently deletes the collection. Matches
     Zotero's own "Delete Collection" behavior: any sub-collections nested
     under it are deleted too, cascading -- but items filed in it (or in a
@@ -1098,8 +1172,14 @@ def delete_collection(key: str, version: int) -> dict:
     version: the collection's current version (from list_collections) --
     the delete is refused if this doesn't match the server's current
     version.
+    idempotency_key: optional opaque string; if a call with this exact
+    key and these exact arguments already completed, that same outcome
+    is replayed instead of running against Zotero again -- see
+    delete_item_permanently's docstring for the full explanation.
     """
-    return get_service().delete_collection(key, version)
+    return get_service().delete_collection(
+        key, version, idempotency_key=idempotency_key
+    )
 
 
 @mcp.tool(
@@ -1111,12 +1191,16 @@ def delete_collection(key: str, version: int) -> dict:
         openWorldHint=True,
     )
 )
-def delete_saved_search(key: str) -> dict:
+def delete_saved_search(key: str, idempotency_key: str | None = None) -> dict:
     """DESTRUCTIVE, but low-risk -- permanently deletes this saved search
     definition. Unlike delete_item_permanently/delete_collection, this
     doesn't touch any items or their citations -- a saved search is just
-    a stored filter, not a container."""
-    return get_service().delete_saved_search(key)
+    a stored filter, not a container.
+    idempotency_key: optional opaque string; if a call with this exact
+    key already completed, that same outcome is replayed instead of
+    running against Zotero again -- see delete_item_permanently's
+    docstring for the full explanation."""
+    return get_service().delete_saved_search(key, idempotency_key=idempotency_key)
 
 
 @mcp.tool(
@@ -1129,7 +1213,11 @@ def delete_saved_search(key: str) -> dict:
     )
 )
 def move_item_to_different_library(
-    key: str, version: int, target_library_id: str, target_library_type: str
+    key: str,
+    version: int,
+    target_library_id: str,
+    target_library_type: str,
+    idempotency_key: str | None = None,
 ) -> dict:
     """DESTRUCTIVE -- moves an item to a different Zotero library (e.g.
     from this user library into a group library, or vice versa). Zotero has
@@ -1146,12 +1234,25 @@ def move_item_to_different_library(
     configured ZOTERO_API_KEY must have write access to it.
     version: the item's current version in the source library (from
     search_items/get_item) -- refused if stale.
+    idempotency_key: strongly recommended for this tool specifically. If
+    the create-in-target step succeeds but the delete-from-source step
+    then fails, this operation ends up erroring while the item now exists
+    in BOTH libraries -- a bare retry would redo the whole thing and
+    create a SECOND duplicate in the target library, since the source
+    item's version hasn't changed. Passing the same idempotency_key on
+    retry replays the original failure (and its "clean up manually"
+    guidance) instead of touching Zotero again. Also protects the normal
+    success path the same way delete_item_permanently's does.
 
     Returns old_key and new_key -- report both to the caller so anyone
     relying on the old key knows it changed.
     """
     return get_service().move_item_to_library(
-        key, version, target_library_id, target_library_type
+        key,
+        version,
+        target_library_id,
+        target_library_type,
+        idempotency_key=idempotency_key,
     )
 
 

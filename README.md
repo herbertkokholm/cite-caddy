@@ -52,6 +52,30 @@ implementing delete/move tools:
 - A dry-run / confirmation step for delete is worth considering, but is an
   implementation decision for whoever builds that tool, not decided here.
 
+## Idempotency
+
+`delete_item_permanently`, `delete_collection`, `delete_tag`,
+`delete_saved_search`, `move_item_to_different_library`, and
+`update_publication_status` all accept an optional `idempotency_key`. Pass
+the same opaque string when retrying a call after a lost or ambiguous
+response (e.g. a network timeout) and the *original* outcome — success or
+error — is replayed instead of running the operation against Zotero again.
+Reusing a key for a call with different arguments raises an error instead of
+silently returning the old result, so it's safe to generate one key per
+logical request and reuse it freely on retries of that same request.
+
+This matters most for `move_item_to_different_library`: it recreates the
+item in the target library, then deletes it from the source. If the create
+succeeds but the delete then fails, a bare retry would redo the whole thing
+— since the source item's version hasn't changed — creating a *second*
+duplicate in the target library. With `idempotency_key`, the retry replays
+the cached failure (and its "clean up manually" guidance) instead of
+touching Zotero again.
+
+The cache is in-memory per server process (per onboarded tenant in HTTP
+mode), with a 24h TTL — it survives retries within that window, not across a
+redeploy/restart.
+
 ## Configuration
 
 **stdio mode** (local, single-user — no `$PORT`): the library to connect to
@@ -196,6 +220,7 @@ change.
 | `create_saved_search` | Safe write | | |
 | `update_collection` | Safe write | ✓ | |
 | `update_item` | Safe write | ✓ | |
+| `update_publication_status` | Safe write | ✓ | Preprint → published: patches fields and, uniquely, `item_type` in place. Accepts `idempotency_key` — see "Idempotency" above. |
 | `add_tags` | Safe write | ✓ | |
 | `remove_tags` | Safe write | ✓ | |
 | `set_tags` | Safe write | ✓ | |
@@ -207,11 +232,11 @@ change.
 | `upload_attachment` | Safe write | | Content sent as `content_base64` — server has no access to the caller's local filesystem. |
 | `create_note` | Safe write | | |
 | `update_note` | Safe write | ✓ | |
-| `delete_item_permanently` | Destructive | ✓ | Breaks Word citations. |
-| `move_item_to_different_library` | Destructive | ✓ | Recreates the item under a brand-new key in the target library, then deletes the original — breaks Word citations. |
-| `delete_collection` | Destructive | ✓ | Cascades to sub-collections (matching Zotero's own "Delete Collection"); never deletes the items filed in them. |
-| `delete_tag` | Destructive | | Library-wide — acts on every item carrying the tag, not just one; no per-tag version. |
-| `delete_saved_search` | Destructive | | Low-risk — a saved search is just a stored filter, never touches items or citations. |
+| `delete_item_permanently` | Destructive | ✓ | Breaks Word citations. Accepts `idempotency_key` — see "Idempotency" above. |
+| `move_item_to_different_library` | Destructive | ✓ | Recreates the item under a brand-new key in the target library, then deletes the original — breaks Word citations. Accepts `idempotency_key`, strongly recommended here — see "Idempotency" above. |
+| `delete_collection` | Destructive | ✓ | Cascades to sub-collections (matching Zotero's own "Delete Collection"); never deletes the items filed in them. Accepts `idempotency_key`. |
+| `delete_tag` | Destructive | | Library-wide — acts on every item carrying the tag, not just one; no per-tag version. Accepts `idempotency_key`. |
+| `delete_saved_search` | Destructive | | Low-risk — a saved search is just a stored filter, never touches items or citations. Accepts `idempotency_key`. |
 
 ## Testing
 

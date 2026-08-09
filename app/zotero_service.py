@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import base64
 import tempfile
-from dataclasses import dataclass
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +86,21 @@ class ZoteroAuthError(ZoteroServiceError):
 class ZoteroApiError(ZoteroServiceError):
     """Catch-all for other Zotero API failures (rate limiting, transient
     HTTP errors, etc.)."""
+
+
+class IdempotencyConflictError(ZoteroServiceError):
+    """An idempotency_key was reused for a call with different arguments
+    than the first call that used it -- refused rather than silently
+    replaying an unrelated cached result. Use a fresh key per distinct
+    request."""
+
+
+# How long a call's outcome stays replayable under its idempotency_key --
+# in-memory only, per ZoteroService instance (per tenant in HTTP mode; see
+# get_service() in app/mcp_server.py), so a redeploy/restart clears it.
+# Sized to cover a caller retrying after a lost response, not as durable
+# audit/dedup storage.
+_IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
 
 
 def _translate(
@@ -235,6 +252,12 @@ def _item_summary(item: dict) -> dict:
 class ZoteroService:
     zot: zotero.Zotero
     api_key: str
+    # tool name -> {idempotency_key -> (cached_at, fingerprint, outcome)}, where
+    # outcome is ("success", result) or ("error", exception) -- see
+    # _run_idempotent below.
+    _idempotency_cache: dict[str, dict[str, tuple[float, Any, tuple]]] = field(
+        default_factory=dict
+    )
 
     @classmethod
     def from_settings(cls, settings: Settings) -> ZoteroService:
@@ -242,6 +265,64 @@ class ZoteroService:
             zotero.Zotero(settings.library_id, settings.library_type, settings.api_key),
             api_key=settings.api_key,
         )
+
+    def _run_idempotent(
+        self,
+        tool: str,
+        idempotency_key: str | None,
+        fingerprint: Any,
+        fn: Callable[[], dict],
+    ) -> dict:
+        """Runs fn() once per (tool, idempotency_key), replaying the
+        cached outcome -- success or error -- on any later call with the
+        same key instead of re-running fn(). Without this, retrying a
+        multi-step operation after a partial failure (e.g.
+        move_item_to_library's create-in-target-then-delete-from-source)
+        can repeat the side effects that already happened rather than
+        just repeating the failure -- see move_item_to_library's
+        docstring for the concrete duplicate-item risk this closes.
+
+        idempotency_key=None (the default) skips all of this and just
+        calls fn() -- existing callers are unaffected.
+
+        Reusing a key for a call with a different fingerprint (i.e. a
+        genuinely different request) raises IdempotencyConflictError
+        rather than silently returning the old result.
+        """
+        if idempotency_key is None:
+            return fn()
+
+        bucket = self._idempotency_cache.setdefault(tool, {})
+        cutoff = time.monotonic() - _IDEMPOTENCY_TTL_SECONDS
+        for key in [k for k, (cached_at, _, _) in bucket.items() if cached_at < cutoff]:
+            del bucket[key]
+
+        cached = bucket.get(idempotency_key)
+        if cached is not None:
+            _, cached_fingerprint, outcome = cached
+            if cached_fingerprint != fingerprint:
+                raise IdempotencyConflictError(
+                    f"idempotency_key {idempotency_key!r} was already used for a "
+                    f"different {tool} call -- use a new key for a different "
+                    "request."
+                )
+            kind, payload = outcome
+            if kind == "error":
+                raise payload
+            return payload
+
+        try:
+            result = fn()
+        except ZoteroServiceError as exc:
+            bucket[idempotency_key] = (time.monotonic(), fingerprint, ("error", exc))
+            raise
+        else:
+            bucket[idempotency_key] = (
+                time.monotonic(),
+                fingerprint,
+                ("success", result),
+            )
+            return result
 
     # ---- read ------------------------------------------------------
 
@@ -507,6 +588,57 @@ class ZoteroService:
             )
         return self._patch(key, version, dict(fields))
 
+    def update_publication_status(
+        self,
+        key: str,
+        version: int,
+        fields: dict[str, Any],
+        item_type: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict:
+        """Updates an item in place to reflect that a preprint has been
+        formally published -- e.g. an arXiv preprint that just received a
+        journal DOI. Same key-preserving patch machinery as update_item
+        (so Word citations keep working) -- prefer this or update_item
+        over delete+recreate whenever a preprint's status changes.
+
+        Unlike update_item, `item_type` may also be given to change the
+        item's Zotero type (e.g. "preprint" -> "journalArticle") --
+        update_item forbids that because changing itemType changes which
+        fields are valid, and this is the one place in this server where
+        that's the deliberate point of the call rather than an accident.
+
+        fields: same rules as update_item -- bibliographic fields such as
+            DOI, url, date, publicationTitle, volume, issue, pages. May
+            not include tags/collections/itemType/key/version/deleted --
+            use the dedicated tag/collection tools for those, or
+            item_type (not fields["itemType"]) to change the item type.
+        item_type: new Zotero item type; omit to leave it unchanged.
+        idempotency_key: see _run_idempotent. Worth passing here too --
+            this is exactly the kind of call an agent might retry after
+            an ambiguous network failure, and replaying the same edit
+            twice is harmless but wasteful, while two DIFFERENT edits
+            landing back-to-back (a genuine double-call, not a retry)
+            would just be silently overwritten by whichever ran last.
+        """
+        reserved = _RESERVED_UPDATE_FIELDS & fields.keys()
+        if reserved:
+            raise ValidationError(
+                f"fields may not include {sorted(reserved)} -- use the dedicated "
+                "tag/collection tools for those, or item_type for itemType"
+            )
+
+        def _do() -> dict:
+            payload = dict(fields)
+            if item_type is not None:
+                payload["itemType"] = item_type
+            return self._patch(key, version, payload)
+
+        fingerprint = (key, version, tuple(sorted(fields.items())), item_type)
+        return self._run_idempotent(
+            "update_publication_status", idempotency_key, fingerprint, _do
+        )
+
     def _patch(self, key: str, version: int, data: dict[str, Any]) -> dict:
         return _item_summary(self._apply_patch(key, version, data))
 
@@ -613,7 +745,7 @@ class ZoteroService:
             "item_keys": updated_keys,
         }
 
-    def delete_tag(self, tag: str) -> dict:
+    def delete_tag(self, tag: str, idempotency_key: str | None = None) -> dict:
         """DESTRUCTIVE. Permanently removes this tag from every item in
         the library that carries it (not one item -- see remove_tags for
         that). Cannot be undone through this server.
@@ -622,12 +754,18 @@ class ZoteroService:
         gates on the library's own current version (fetched internally)
         rather than a version the caller passes in -- unlike item/
         collection deletes, there's no per-tag version to check.
+
+        idempotency_key: see _run_idempotent.
         """
-        try:
-            self.zot.delete_tags(tag)
-        except Exception as exc:
-            raise _translate(exc) from exc
-        return {"tag": tag, "deleted": True}
+
+        def _do() -> dict:
+            try:
+                self.zot.delete_tags(tag)
+            except Exception as exc:
+                raise _translate(exc) from exc
+            return {"tag": tag, "deleted": True}
+
+        return self._run_idempotent("delete_tag", idempotency_key, (tag,), _do)
 
     # ---- collection membership (key-preserving "move") -----------------
 
@@ -853,7 +991,9 @@ class ZoteroService:
 
     # ---- destructive: delete --------------------------------------------
 
-    def delete_item(self, key: str, version: int) -> dict:
+    def delete_item(
+        self, key: str, version: int, idempotency_key: str | None = None
+    ) -> dict:
         """DESTRUCTIVE. Permanently deletes the item from its library.
 
         Any Word document citing this item via the Zotero Word plugin's
@@ -865,14 +1005,22 @@ class ZoteroService:
         before calling it. `version` must match the item's current version
         or the call is refused (VersionConflictError) rather than deleting
         a version the caller hasn't actually seen.
-        """
-        try:
-            self.zot.delete_item({"key": key, "version": version})
-        except Exception as exc:
-            raise _translate(exc, key=key) from exc
-        return {"key": key, "deleted": True}
 
-    def delete_collection(self, key: str, version: int) -> dict:
+        idempotency_key: see _run_idempotent.
+        """
+
+        def _do() -> dict:
+            try:
+                self.zot.delete_item({"key": key, "version": version})
+            except Exception as exc:
+                raise _translate(exc, key=key) from exc
+            return {"key": key, "deleted": True}
+
+        return self._run_idempotent("delete_item", idempotency_key, (key, version), _do)
+
+    def delete_collection(
+        self, key: str, version: int, idempotency_key: str | None = None
+    ) -> dict:
         """DESTRUCTIVE. Permanently deletes the collection. Matches
         Zotero's own "Delete Collection" behavior: any sub-collections
         nested under it are deleted too, cascading -- but items filed in
@@ -884,26 +1032,43 @@ class ZoteroService:
         including checking list_collections for sub-collections first if
         that matters. `version` must match the collection's current
         version or the call is refused (VersionConflictError).
-        """
-        try:
-            self.zot.delete_collection({"key": key, "version": version})
-        except Exception as exc:
-            raise _translate(
-                exc, key=key, not_found_cls=CollectionNotFoundError, noun="collection"
-            ) from exc
-        return {"key": key, "deleted": True}
 
-    def delete_saved_search(self, key: str) -> dict:
+        idempotency_key: see _run_idempotent.
+        """
+
+        def _do() -> dict:
+            try:
+                self.zot.delete_collection({"key": key, "version": version})
+            except Exception as exc:
+                raise _translate(
+                    exc,
+                    key=key,
+                    not_found_cls=CollectionNotFoundError,
+                    noun="collection",
+                ) from exc
+            return {"key": key, "deleted": True}
+
+        return self._run_idempotent(
+            "delete_collection", idempotency_key, (key, version), _do
+        )
+
+    def delete_saved_search(self, key: str, idempotency_key: str | None = None) -> dict:
         """DESTRUCTIVE, but low-risk. Permanently deletes this saved
         search definition. Unlike delete_item/delete_collection, this
         doesn't touch any items or their citations -- a saved search is
         just a stored filter, not a container.
+
+        idempotency_key: see _run_idempotent.
         """
-        try:
-            self.zot.delete_saved_search([key])
-        except Exception as exc:
-            raise _translate(exc, key=key) from exc
-        return {"key": key, "deleted": True}
+
+        def _do() -> dict:
+            try:
+                self.zot.delete_saved_search([key])
+            except Exception as exc:
+                raise _translate(exc, key=key) from exc
+            return {"key": key, "deleted": True}
+
+        return self._run_idempotent("delete_saved_search", idempotency_key, (key,), _do)
 
     # ---- destructive: cross-library move --------------------------------
 
@@ -913,6 +1078,7 @@ class ZoteroService:
         version: int,
         target_library_id: str,
         target_library_type: str,
+        idempotency_key: str | None = None,
     ) -> dict:
         """DESTRUCTIVE. Zotero has no native cross-library move -- this
         recreates the item in the target library, then deletes it from the
@@ -927,7 +1093,32 @@ class ZoteroService:
 
         The configured ZOTERO_API_KEY must have write access to
         target_library_id as well as the source library.
+
+        idempotency_key: strongly recommended here specifically -- if the
+        create-in-target step succeeds but the delete-from-source step
+        then fails (see the "exists in BOTH libraries" error below), a
+        bare retry would redo the whole thing and create a SECOND
+        duplicate in the target library, because the source item's
+        version hasn't changed. Passing the same idempotency_key on retry
+        replays the original failure instead of touching Zotero again --
+        see _run_idempotent.
         """
+        return self._run_idempotent(
+            "move_item_to_library",
+            idempotency_key,
+            (key, version, target_library_id, target_library_type),
+            lambda: self._move_item_to_library(
+                key, version, target_library_id, target_library_type
+            ),
+        )
+
+    def _move_item_to_library(
+        self,
+        key: str,
+        version: int,
+        target_library_id: str,
+        target_library_type: str,
+    ) -> dict:
         try:
             current = self.zot.item(key)
         except Exception as exc:
@@ -942,7 +1133,7 @@ class ZoteroService:
             # post-create version check would otherwise create.
             raise _translate(zotero_errors.PreConditionFailedError(), key=key)
         item_type = data.get("itemType")
-        for field in (
+        for field_name in (
             "key",
             "version",
             "dateAdded",
@@ -950,7 +1141,7 @@ class ZoteroService:
             "collections",
             "relations",
         ):
-            data.pop(field, None)
+            data.pop(field_name, None)
 
         try:
             target_zot = zotero.Zotero(

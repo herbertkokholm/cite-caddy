@@ -80,6 +80,14 @@ docstring — an MCP client's model reads the tool name and docstring before
 deciding whether to call it, so that's the only place a warning reliably
 reaches it.
 
+Destructive or multi-step tools should also accept an optional
+`idempotency_key: str | None = None` and thread it through
+`ZoteroService._run_idempotent` (see `delete_item`/`move_item_to_library`
+for examples). It replays a call's cached outcome — success *or* error —
+instead of re-running it, which matters most for multi-step operations
+where a retry after a partial failure would otherwise repeat side effects
+that already happened (see README's "Idempotency" section).
+
 ## Data and secrets
 
 Real Zotero/OAuth credentials belong in `.env` (gitignored) locally, or

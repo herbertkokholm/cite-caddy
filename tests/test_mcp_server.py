@@ -72,6 +72,33 @@ def test_update_item_tool_rejects_tags_field(fake_service):
         mcp_server.update_item(item["key"], version=1, fields={"tags": []})
 
 
+def test_update_publication_status_tool(fake_service):
+    item = fake_service.seed_item("preprint", {"title": "A Preprint"})
+
+    updated = mcp_server.update_publication_status(
+        item["key"],
+        version=1,
+        fields={"DOI": "10.1/published"},
+        item_type="journalArticle",
+    )
+
+    assert updated["doi"] == "10.1/published"
+    assert updated["item_type"] == "journalArticle"
+
+
+def test_delete_item_permanently_tool_idempotency_key(fake_service):
+    item = fake_service.seed_item("book")
+
+    first = mcp_server.delete_item_permanently(
+        item["key"], version=1, idempotency_key="k1"
+    )
+    replayed = mcp_server.delete_item_permanently(
+        item["key"], version=1, idempotency_key="k1"
+    )
+
+    assert first == replayed == {"key": item["key"], "deleted": True}
+
+
 def test_tag_tools(fake_service):
     item = fake_service.seed_item("book", {"tags": [{"tag": "a"}]})
     updated = mcp_server.add_tags(item["key"], version=1, tags=["b"])

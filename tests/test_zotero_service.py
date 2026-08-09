@@ -4,9 +4,11 @@ import pytest
 
 from app.zotero_service import (
     CollectionNotFoundError,
+    IdempotencyConflictError,
     ItemNotFoundError,
     ValidationError,
     VersionConflictError,
+    ZoteroApiError,
 )
 
 # ---- read ----------------------------------------------------------------
@@ -504,6 +506,95 @@ def test_update_item_version_conflict(service, fake_zot):
         service.update_item(item["key"], version=1, fields={"title": "Clobber attempt"})
 
 
+# ---- update_publication_status (preprint -> published) --------------------
+
+
+def test_update_publication_status_updates_fields_and_item_type(service, fake_zot):
+    item = fake_zot.seed_item(
+        "preprint", {"title": "A Preprint", "url": "https://arxiv.org/abs/1234"}
+    )
+
+    updated = service.update_publication_status(
+        item["key"],
+        version=1,
+        fields={"DOI": "10.1/published", "publicationTitle": "Journal of Examples"},
+        item_type="journalArticle",
+    )
+
+    assert updated["key"] == item["key"]  # key preserved
+    assert updated["doi"] == "10.1/published"
+    assert updated["item_type"] == "journalArticle"
+
+
+def test_update_publication_status_leaves_item_type_unchanged_by_default(
+    service, fake_zot
+):
+    item = fake_zot.seed_item("preprint", {"title": "A Preprint"})
+
+    updated = service.update_publication_status(
+        item["key"], version=1, fields={"DOI": "10.1/published"}
+    )
+
+    assert updated["item_type"] == "preprint"
+
+
+def test_update_publication_status_rejects_reserved_fields(service, fake_zot):
+    item = fake_zot.seed_item("preprint")
+    with pytest.raises(ValidationError):
+        service.update_publication_status(
+            item["key"], version=1, fields={"tags": [{"tag": "x"}]}
+        )
+
+
+def test_update_publication_status_version_conflict(service, fake_zot):
+    item = fake_zot.seed_item("preprint", {"title": "Old"})
+    service.update_item(item["key"], version=1, fields={"title": "Changed elsewhere"})
+
+    with pytest.raises(VersionConflictError):
+        service.update_publication_status(
+            item["key"], version=1, fields={"DOI": "10.1/published"}
+        )
+
+
+def test_update_publication_status_idempotency_key_replays_success(service, fake_zot):
+    item = fake_zot.seed_item("preprint", {"title": "A Preprint"})
+
+    first = service.update_publication_status(
+        item["key"],
+        version=1,
+        fields={"DOI": "10.1/published"},
+        idempotency_key="k1",
+    )
+    replayed = service.update_publication_status(
+        item["key"],
+        version=1,
+        fields={"DOI": "10.1/published"},
+        idempotency_key="k1",
+    )
+
+    assert first == replayed
+    # Replay must not have re-run the patch -- version only bumped once.
+    assert service.get_item(item["key"])["version"] == first["version"]
+
+
+def test_update_publication_status_idempotency_key_conflict_on_mismatched_args(
+    service, fake_zot
+):
+    item = fake_zot.seed_item("preprint", {"title": "A Preprint"})
+
+    service.update_publication_status(
+        item["key"], version=1, fields={"DOI": "10.1/published"}, idempotency_key="k1"
+    )
+
+    with pytest.raises(IdempotencyConflictError):
+        service.update_publication_status(
+            item["key"],
+            version=1,
+            fields={"DOI": "10.1/different"},
+            idempotency_key="k1",
+        )
+
+
 # ---- tags --------------------------------------------------------------
 
 
@@ -725,6 +816,57 @@ def test_delete_item_version_conflict_does_not_delete(service, fake_zot):
     assert service.get_item(item["key"])["title"] == "Changed elsewhere"
 
 
+# ---- idempotency-key -------------------------------------------------------
+
+
+def test_delete_item_idempotency_key_replays_success(service, fake_zot):
+    item = fake_zot.seed_item("book")
+
+    first = service.delete_item(item["key"], version=1, idempotency_key="k1")
+    replayed = service.delete_item(item["key"], version=1, idempotency_key="k1")
+
+    assert first == replayed == {"key": item["key"], "deleted": True}
+
+
+def test_delete_item_idempotency_key_conflict_on_mismatched_args(service, fake_zot):
+    a = fake_zot.seed_item("book")
+    b = fake_zot.seed_item("book")
+
+    service.delete_item(a["key"], version=1, idempotency_key="k1")
+
+    with pytest.raises(IdempotencyConflictError):
+        service.delete_item(b["key"], version=1, idempotency_key="k1")
+
+
+def test_delete_collection_idempotency_key_replays_success(service, fake_zot):
+    coll = fake_zot.seed_collection("Doomed")
+
+    first = service.delete_collection(coll["key"], version=1, idempotency_key="k1")
+    replayed = service.delete_collection(coll["key"], version=1, idempotency_key="k1")
+
+    assert first == replayed == {"key": coll["key"], "deleted": True}
+
+
+def test_delete_saved_search_idempotency_key_replays_success(service):
+    created = service.create_saved_search(
+        "Doomed", [{"condition": "itemType", "operator": "is", "value": "book"}]
+    )
+
+    first = service.delete_saved_search(created["key"], idempotency_key="k1")
+    replayed = service.delete_saved_search(created["key"], idempotency_key="k1")
+
+    assert first == replayed == {"key": created["key"], "deleted": True}
+
+
+def test_delete_tag_idempotency_key_replays_success(service, fake_zot):
+    fake_zot.seed_item("book", {"tags": [{"tag": "doomed"}]})
+
+    first = service.delete_tag("doomed", idempotency_key="k1")
+    replayed = service.delete_tag("doomed", idempotency_key="k1")
+
+    assert first == replayed == {"tag": "doomed", "deleted": True}
+
+
 # ---- destructive: cross-library move -------------------------------------
 
 
@@ -790,3 +932,83 @@ def test_move_item_to_library(service, fake_zot):
     # Collections are not carried over to the new library -- they're
     # library-specific keys that wouldn't exist (or mean the same thing) there.
     assert service.get_item(result["new_key"])["collections"] == []
+
+
+def test_move_item_idempotency_key_replays_success(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle", {"title": "Portable Paper"})
+
+    import app.zotero_service as mod
+
+    original_zotero_cls = mod.zotero.Zotero
+    mod.zotero.Zotero = lambda *a, **kw: fake_zot
+    try:
+        first = service.move_item_to_library(
+            item["key"],
+            version=1,
+            target_library_id="456",
+            target_library_type="group",
+            idempotency_key="k1",
+        )
+        replayed = service.move_item_to_library(
+            item["key"],
+            version=1,
+            target_library_id="456",
+            target_library_type="group",
+            idempotency_key="k1",
+        )
+    finally:
+        mod.zotero.Zotero = original_zotero_cls
+
+    assert first == replayed
+    # Replay must not have re-run the move -- still just the one new item.
+    assert len(fake_zot.items()) == 1
+
+
+def test_move_item_idempotency_key_prevents_duplicate_on_retry_after_failure(
+    service, fake_zot
+):
+    """The scenario move_item_to_library's docstring warns about: create
+    in target succeeds, delete from source fails. A bare retry would redo
+    the whole thing (the source item's version is unchanged) and create a
+    SECOND duplicate. With idempotency_key, the retry must replay the
+    cached failure instead of touching Zotero again."""
+    item = fake_zot.seed_item("journalArticle", {"title": "Portable Paper"})
+
+    from pyzotero import zotero_errors
+
+    import app.zotero_service as mod
+
+    original_zotero_cls = mod.zotero.Zotero
+    mod.zotero.Zotero = lambda *a, **kw: fake_zot
+
+    def failing_delete(*args, **kwargs):
+        raise zotero_errors.PyZoteroError("simulated delete-from-source failure")
+
+    fake_zot.delete_item = failing_delete
+
+    try:
+        with pytest.raises(ZoteroApiError):
+            service.move_item_to_library(
+                item["key"],
+                version=1,
+                target_library_id="456",
+                target_library_type="group",
+                idempotency_key="retry-me",
+            )
+        # Create-in-target succeeded before delete-from-source failed --
+        # original item plus one duplicate now exist.
+        assert len(fake_zot.items()) == 2
+
+        with pytest.raises(ZoteroApiError):
+            service.move_item_to_library(
+                item["key"],
+                version=1,
+                target_library_id="456",
+                target_library_type="group",
+                idempotency_key="retry-me",
+            )
+        # The retry replayed the cached failure rather than re-running the
+        # move -- still just one duplicate, not two.
+        assert len(fake_zot.items()) == 2
+    finally:
+        mod.zotero.Zotero = original_zotero_cls
