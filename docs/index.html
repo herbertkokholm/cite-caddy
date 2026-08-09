@@ -7,7 +7,7 @@
   <title>Cite Caddy</title>
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
   <meta name="description"
-    content="A standalone, remote MCP server giving full read/write access to a Zotero library — 36 tools covering items, collections, tags, trash, saved searches, and schema lookups. Self-service, multi-tenant: connect with your own Zotero API key, gated by a first-party OAuth 2.1 flow.">
+    content="A standalone, remote MCP server giving full read/write access to a Zotero library — 39 tools covering items, collections, tags, trash, saved searches, and schema lookups. Self-service, multi-tenant: connect with your own Zotero API key, gated by a first-party OAuth 2.1 flow.">
   <style>
     :root,
     :root[data-theme="dark"] {
@@ -498,7 +498,7 @@
     <p>A standalone, remote MCP server that turns Zotero into something your AI
       client can act on directly: search, create, tag, update — even delete and
       move, with real safeguards. Covers the full library surface — items,
-      collections, tags, trash, saved searches, and schema lookups — in 36 tools.
+      collections, tags, trash, saved searches, and schema lookups — in 39 tools.
       Self-service and multi-tenant: sign in with your own Zotero Library ID and
       API key, no admin approval, no shared credentials. Nothing to install
       locally, gated by a first-party OAuth 2.1 flow built into the server itself.</p>
@@ -581,17 +581,20 @@
         <pre>claude mcp add --transport http cite-caddy \
   https://your-domain.example/mcp</pre>
 
-        <h5>Available tools <span style="font-weight:400">— 36 total</span></h5>
+        <h5>Available tools <span style="font-weight:400">— 39 total</span></h5>
         <div class="mcp-tools">
           <div><code>search_items / get_item / list_collections / list_tags / list_trash</code><span>Read-only
               lookups against the connected library</span></div>
           <div><code>list_saved_searches / list_groups</code><span>Discover saved searches, and groups whose
               <code>id</code> can target <code>move_item_to_different_library</code></span></div>
-          <div><code>list_item_types / list_item_fields / list_item_type_fields / list_item_creator_types</code><span>Zotero's
+          <div><code>list_item_types / list_item_fields / list_item_type_fields / list_item_creator_types / list_creator_fields</code><span>Zotero's
               own schema — check before a create/update call, instead of guessing</span></div>
           <div><code>list_attachments / get_fulltext / download_attachment / list_notes</code><span>Read-only lookups
               for attachments and notes</span></div>
-          <div><code>create_item / update_item</code><span>Add new items or edit fields — always key-preserving</span>
+          <div><code>export_bibliography</code><span>Formatted HTML bibliography/citation entries in a CSL style, or
+              portable CSL-JSON/BibTeX export data</span></div>
+          <div><code>create_item / update_item / update_publication_status</code><span>Add new items, edit fields, or
+              record a preprint's publication (even its item type) — always key-preserving</span>
           </div>
           <div><code>add_tags / remove_tags / set_tags / rename_tag</code><span>Manage tags per-item or library-wide,
               without touching item keys</span></div>
@@ -604,9 +607,9 @@
           <div><code>upload_attachment / create_note / update_note</code><span>Add a file attachment or note, or
               edit a note in place</span></div>
           <div><code>delete_item_permanently / move_item_to_different_library</code><span>Destructive — requires the
-              item's current <code>version</code></span></div>
+              item's current <code>version</code>; both accept an <code>idempotency_key</code> to make retries safe</span></div>
           <div><code>delete_collection / delete_tag / delete_saved_search</code><span>Permanently remove a
-              collection, a tag library-wide, or a saved search</span></div>
+              collection, a tag library-wide, or a saved search — also accept <code>idempotency_key</code></span></div>
         </div>
       </div>
     </section>
