@@ -1,6 +1,6 @@
 [project]
 name = "cite-caddy"
-version = "2.3.1"
+version = "2.3.2"
 description = "Remote MCP server for full read/write access to a Zotero library"
 readme = "README.md"
 license = "MIT"
