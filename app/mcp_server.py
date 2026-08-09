@@ -62,7 +62,7 @@ from mcp.server.auth.settings import (
     RevocationOptions,
 )
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
-from mcp.types import Icon, ToolAnnotations
+from mcp.types import Icon, Tool, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
@@ -197,21 +197,37 @@ if _PORT:
         paragraph = text.strip().split("\n\n", 1)[0]
         return " ".join(paragraph.split())
 
+    def _tool_card_entry(t: Tool) -> dict[str, Any]:
+        """Full-fidelity per-tool entry for /.well-known/mcp/server-card.json
+        -- includes outputSchema/annotations because every tool here
+        already has both via its @mcp.tool() registration, so omitting
+        them would just be throwing away metadata that's already sitting
+        on `t`."""
+        d = t.model_dump(mode="json", by_alias=True)
+        return {
+            "name": d["name"],
+            "description": _first_paragraph(d.get("description") or ""),
+            "inputSchema": d["inputSchema"],
+            "outputSchema": d.get("outputSchema"),
+            "annotations": d.get("annotations"),
+        }
+
     async def _server_card_data() -> dict[str, Any]:
         tools = await mcp.list_tools()
+        server_info: dict[str, Any] = {
+            "name": "Cite Caddy",
+            "version": _pkg_version("cite-caddy"),
+            "description": (
+                "Remote MCP server for full read/write access to a Zotero library"
+            ),
+        }
+        if _WEBSITE_URL:
+            server_info["homepage"] = _WEBSITE_URL
+            server_info["icon"] = f"{_WEBSITE_URL}icons/icon.svg"
         return {
-            "serverInfo": {"name": "Cite Caddy", "version": _pkg_version("cite-caddy")},
+            "serverInfo": server_info,
             "authentication": {"required": True, "schemes": ["oauth2"]},
-            "tools": [
-                {
-                    "name": t.name,
-                    "description": _first_paragraph(t.description or ""),
-                    "inputSchema": t.model_dump(mode="json", by_alias=True)[
-                        "inputSchema"
-                    ],
-                }
-                for t in tools
-            ],
+            "tools": [_tool_card_entry(t) for t in tools],
             "resources": [],
             "prompts": [],
         }

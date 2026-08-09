@@ -297,6 +297,7 @@ def test_server_card_shape(client):
 
     assert body["serverInfo"]["name"] == "Cite Caddy"
     assert body["serverInfo"]["version"]
+    assert body["serverInfo"]["description"]
     assert body["authentication"] == {"required": True, "schemes": ["oauth2"]}
     assert body["resources"] == []
     assert body["prompts"] == []
@@ -308,6 +309,42 @@ def test_server_card_shape(client):
     assert len(body["tools"]) == 39
 
 
+def test_server_card_omits_homepage_and_icon_when_website_url_unset(client):
+    # http_mcp_server (via the client fixture) doesn't set MCP_WEBSITE_URL.
+    body = client.get("/.well-known/mcp/server-card.json").json()
+    assert "homepage" not in body["serverInfo"]
+    assert "icon" not in body["serverInfo"]
+
+
+def test_server_card_includes_homepage_and_icon_when_website_url_configured(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("PORT", "8199")
+    monkeypatch.delenv("ZOTERO_LIBRARY_ID", raising=False)
+    monkeypatch.delenv("ZOTERO_API_KEY", raising=False)
+    monkeypatch.setenv("MCP_TOKEN_STORE_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("MCP_PUBLIC_URL", "https://example.test")
+    monkeypatch.setenv("MCP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("MCP_WEBSITE_URL", "https://example.test/site/")
+
+    sys.modules.pop("app.mcp_server", None)
+    module = importlib.import_module("app.mcp_server")
+    module.metrics.reset()
+
+    import app.oauth_provider as oauth_provider_mod
+
+    monkeypatch.setattr(oauth_provider_mod.zotero, "Zotero", _FakeZotero)
+
+    try:
+        with TestClient(module.mcp.streamable_http_app()) as test_client:
+            body = test_client.get("/.well-known/mcp/server-card.json").json()
+    finally:
+        sys.modules.pop("app.mcp_server", None)
+
+    assert body["serverInfo"]["homepage"] == "https://example.test/site/"
+    assert body["serverInfo"]["icon"] == "https://example.test/site/icons/icon.svg"
+
+
 def test_server_card_tool_entries_have_no_multi_paragraph_descriptions(client):
     body = client.get("/.well-known/mcp/server-card.json").json()
 
@@ -316,6 +353,19 @@ def test_server_card_tool_entries_have_no_multi_paragraph_descriptions(client):
     assert "\n" not in search_items["description"]
     assert "inputSchema" in search_items
     assert search_items["inputSchema"]["type"] == "object"
+
+
+def test_server_card_tool_entries_include_output_schema_and_annotations(client):
+    body = client.get("/.well-known/mcp/server-card.json").json()
+
+    search_items = next(t for t in body["tools"] if t["name"] == "search_items")
+    assert search_items["outputSchema"]
+    assert search_items["annotations"]["readOnlyHint"] is True
+
+    delete_item = next(
+        t for t in body["tools"] if t["name"] == "delete_item_permanently"
+    )
+    assert delete_item["annotations"]["destructiveHint"] is True
 
 
 # ---- tools/call tracking middleware ------------------------------------
