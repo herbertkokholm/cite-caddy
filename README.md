@@ -1,6 +1,7 @@
 # Cite Caddy
 
 [![cite-caddy MCP server](https://glama.ai/mcp/servers/herbertkokholm/cite-caddy/badges/score.svg)](https://glama.ai/mcp/servers/herbertkokholm/cite-caddy)
+[![smithery badge](https://smithery.ai/badge/herbertkokholm/cite-caddy)](https://smithery.ai/servers/herbertkokholm/cite-caddy)
 
 A reference-library bridge for AI assistants — a standalone, remote MCP
 server.
