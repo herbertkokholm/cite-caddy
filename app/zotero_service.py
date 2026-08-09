@@ -95,6 +95,8 @@ class IdempotencyConflictError(ZoteroServiceError):
     request."""
 
 
+_EXPORT_FORMATS = {"bibliography", "citation", "csljson", "bibtex"}
+
 # How long a call's outcome stays replayable under its idempotency_key --
 # in-memory only, per ZoteroService instance (per tenant in HTTP mode; see
 # get_service() in app/mcp_server.py), so a redeploy/restart clears it.
@@ -524,6 +526,70 @@ class ZoteroService:
             for c in children
             if c.get("data", {}).get("itemType") == "note"
         ]
+
+    def export_bibliography(
+        self, keys: list[str], style: str = "apa", format: str = "bibliography"
+    ) -> dict:
+        """Generate formatted bibliography/citation entries or portable
+        export data for one or more items. Read-only.
+
+        keys: item keys (see search_items/get_item). Keys not found in the
+            library are simply absent from the result -- not an error
+            (matches Zotero's own itemKey filter semantics).
+        style: a Zotero/CSL style ID (e.g. "apa",
+            "modern-language-association", "chicago-note-bibliography") --
+            only used when format is "bibliography" or "citation"; ignored
+            otherwise. An unknown style raises an error.
+        format:
+            "bibliography" (default) -- HTML reference-list entries, one
+                per found key, in `style`.
+            "citation" -- HTML in-text citations, one per found key, in
+                `style`.
+            "csljson" -- structured CSL-JSON, one object per found key --
+                portable, importable into other reference managers/format
+                converters.
+            "bibtex" -- one combined BibTeX text blob covering all found
+                keys, ready to paste into a LaTeX project.
+
+        Returns {"format", "style" (None for csljson/bibtex),
+        "requested_keys", "content"} where `content`'s type depends on
+        `format`: list[str] for bibliography/citation, list[dict] for
+        csljson, str for bibtex.
+        """
+        if not keys:
+            raise ValidationError("keys must be a non-empty list")
+        if format not in _EXPORT_FORMATS:
+            raise ValidationError(
+                f"format must be one of {sorted(_EXPORT_FORMATS)}, got {format!r}"
+            )
+
+        item_key_param = ",".join(keys)
+        try:
+            if format == "bibliography":
+                content: Any = self.zot.items(
+                    itemKey=item_key_param, content="bib", style=style
+                )
+            elif format == "citation":
+                content = self.zot.items(
+                    itemKey=item_key_param, content="citation", style=style
+                )
+            elif format == "csljson":
+                content = self.zot.items(itemKey=item_key_param, format="csljson")
+            else:  # bibtex
+                self.zot.items(itemKey=item_key_param, format="bibtex")
+                # Read the raw response text rather than pyzotero's parsed
+                # BibDatabase object, so callers get one clean, ready-to-paste
+                # blob instead of a fragmented parsed structure.
+                content = self.zot.request.text
+        except Exception as exc:
+            raise _translate(exc) from exc
+
+        return {
+            "format": format,
+            "style": style if format in ("bibliography", "citation") else None,
+            "requested_keys": keys,
+            "content": content,
+        }
 
     # ---- create ------------------------------------------------------
 

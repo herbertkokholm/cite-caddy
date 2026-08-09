@@ -128,7 +128,10 @@ _INSTRUCTIONS = (
     "distinct request, not one key for every call. "
     "update_publication_status updates an item's fields (and, uniquely, "
     "its item_type) in place when a preprint is formally published -- "
-    "prefer it (or update_item) over delete+recreate."
+    "prefer it (or update_item) over delete+recreate. export_bibliography "
+    "generates formatted references (HTML bibliography/citation entries in "
+    "a given CSL style) or portable export data (CSL-JSON, BibTeX) for a "
+    "list of item keys."
 )
 
 _WEBSITE_URL = os.environ.get("MCP_WEBSITE_URL")
@@ -689,6 +692,43 @@ def list_notes(item_key: str) -> list[dict]:
     (see list_attachments for those). Read-only. Each result includes
     full note content and `version` -- pass both to update_note."""
     return get_service().list_notes(item_key)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Export Bibliography or Citations",
+        readOnlyHint=True,
+        openWorldHint=True,
+    )
+)
+def export_bibliography(
+    keys: list[str], style: str = "apa", format: str = "bibliography"
+) -> dict:
+    """Generate formatted bibliography/citation entries or portable export
+    data for one or more items. Read-only.
+
+    keys: item keys (see search_items/get_item). Keys not found in the
+        library are simply absent from the result -- not an error.
+    style: a Zotero/CSL style ID (e.g. "apa",
+        "modern-language-association", "chicago-note-bibliography") --
+        only used when format is "bibliography" or "citation"; ignored
+        otherwise. An unknown style raises an error naming the problem.
+    format:
+        "bibliography" (default) -- HTML reference-list entries, one per
+            found key, in `style`.
+        "citation" -- HTML in-text citations, one per found key, in
+            `style`.
+        "csljson" -- structured CSL-JSON, one object per found key --
+            portable, importable into other reference managers or format
+            converters.
+        "bibtex" -- one combined BibTeX text blob covering all found
+            keys, ready to paste into a LaTeX project.
+
+    Returns `content`, whose type depends on `format`: a list of strings
+    for "bibliography"/"citation", a list of objects for "csljson", or a
+    single string for "bibtex".
+    """
+    return get_service().export_bibliography(keys, style=style, format=format)
 
 
 # ---- create (safe) -------------------------------------------------------

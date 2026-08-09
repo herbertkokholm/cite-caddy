@@ -215,6 +215,7 @@ change.
 | `get_fulltext` | Read-only | | |
 | `download_attachment` | Read-only | | Content returned as `content_base64` — server has no access to the caller's local filesystem. |
 | `list_notes` | Read-only | | |
+| `export_bibliography` | Read-only | | Formatted HTML bibliography/citation entries (in a given CSL `style`) or portable export data (`csljson`, `bibtex`) for a list of item keys. Unknown keys silently omitted. |
 | `create_item` | Safe write | | |
 | `create_collection` | Safe write | | |
 | `create_saved_search` | Safe write | | |

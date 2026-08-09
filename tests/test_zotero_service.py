@@ -403,6 +403,75 @@ def test_update_note_version_conflict(service, fake_zot):
         service.update_note(note["key"], version=1, content="<p>Clobber attempt.</p>")
 
 
+# ---- export_bibliography ---------------------------------------------------
+
+
+def test_export_bibliography_html(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle", {"title": "A Paper"})
+
+    result = service.export_bibliography([item["key"]], style="apa")
+
+    assert result["format"] == "bibliography"
+    assert result["style"] == "apa"
+    assert result["requested_keys"] == [item["key"]]
+    assert len(result["content"]) == 1
+    assert "A Paper" in result["content"][0]
+
+
+def test_export_bibliography_citation(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle", {"title": "A Paper"})
+
+    result = service.export_bibliography([item["key"]], style="apa", format="citation")
+
+    assert result["format"] == "citation"
+    assert result["style"] == "apa"
+    assert len(result["content"]) == 1
+    assert item["key"] in result["content"][0]
+
+
+def test_export_bibliography_csljson(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle", {"title": "A Paper"})
+
+    result = service.export_bibliography([item["key"]], format="csljson")
+
+    assert result["format"] == "csljson"
+    assert result["style"] is None
+    assert result["content"] == [
+        {"id": item["key"], "title": "A Paper", "type": "journalArticle"}
+    ]
+
+
+def test_export_bibliography_bibtex(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle", {"title": "A Paper"})
+
+    result = service.export_bibliography([item["key"]], format="bibtex")
+
+    assert result["format"] == "bibtex"
+    assert result["style"] is None
+    assert isinstance(result["content"], str)
+    assert item["key"] in result["content"]
+
+
+def test_export_bibliography_unknown_keys_silently_omitted(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle", {"title": "A Paper"})
+
+    result = service.export_bibliography([item["key"], "MISSING"], format="csljson")
+
+    assert len(result["content"]) == 1
+    assert result["requested_keys"] == [item["key"], "MISSING"]
+
+
+def test_export_bibliography_rejects_empty_keys(service):
+    with pytest.raises(ValidationError):
+        service.export_bibliography([])
+
+
+def test_export_bibliography_rejects_invalid_format(service, fake_zot):
+    item = fake_zot.seed_item("journalArticle")
+    with pytest.raises(ValidationError):
+        service.export_bibliography([item["key"]], format="ris")
+
+
 # ---- attachments (create) ---------------------------------------------------
 
 

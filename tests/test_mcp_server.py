@@ -99,6 +99,16 @@ def test_delete_item_permanently_tool_idempotency_key(fake_service):
     assert first == replayed == {"key": item["key"], "deleted": True}
 
 
+def test_export_bibliography_tool(fake_service):
+    item = fake_service.seed_item("journalArticle", {"title": "A Paper"})
+
+    result = mcp_server.export_bibliography([item["key"]], format="csljson")
+
+    assert result["content"] == [
+        {"id": item["key"], "title": "A Paper", "type": "journalArticle"}
+    ]
+
+
 def test_tag_tools(fake_service):
     item = fake_service.seed_item("book", {"tags": [{"tag": "a"}]})
     updated = mcp_server.add_tags(item["key"], version=1, tags=["b"])

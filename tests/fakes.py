@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from pyzotero import zotero_errors
@@ -30,6 +31,10 @@ class FakeZotero:
         self._saved_searches: dict[str, dict[str, Any]] = {}
         self._groups: list[dict[str, Any]] = []
         self._next_id = 1
+        # Mirrors pyzotero's Zotero.request -- the raw response object from
+        # the last call, set as a side effect by items() when format="bibtex"
+        # (see export_bibliography's use of self.zot.request.text).
+        self.request: SimpleNamespace | None = None
 
     # ---- test setup helpers (not part of pyzotero's real interface) ----
 
@@ -205,6 +210,42 @@ class FakeZotero:
         # Real Zotero API excludes trashed items from the normal /items
         # listing by default -- they only show up via /items/trash.
         results = [i for i in self._items.values() if not i["data"].get("deleted")]
+        item_key = kwargs.get("itemKey")
+        if item_key:
+            wanted = set(item_key.split(","))
+            results = [i for i in results if i["data"].get("key") in wanted]
+
+        content = kwargs.get("content")
+        export_format = kwargs.get("format")
+        if content == "bib":
+            style = kwargs.get("style", "apa")
+            return [
+                f"<div class='csl-entry'>FAKE-BIB[{style}]: "
+                f"{i['data'].get('title', '')}</div>"
+                for i in results
+            ]
+        if content == "citation":
+            style = kwargs.get("style", "apa")
+            return [f"(FAKE-CITATION[{style}]: {i['data']['key']})" for i in results]
+        if export_format == "csljson":
+            return [
+                {
+                    "id": i["data"]["key"],
+                    "title": i["data"].get("title", ""),
+                    "type": i["data"].get("itemType", ""),
+                }
+                for i in results
+            ]
+        if export_format == "bibtex":
+            text = "\n".join(
+                "@article{"
+                f"{i['data']['key']}, title={{{i['data'].get('title', '')}}}"
+                "}"
+                for i in results
+            )
+            self.request = SimpleNamespace(text=text)
+            return results
+
         q = kwargs.get("q")
         if q:
             needle = q.lower()
