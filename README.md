@@ -15,7 +15,7 @@ Cite Caddy gives full read/write access to a Zotero library — search, add,
 tag, update, delete, and move items; create, rename, and delete
 collections; upload/download attachments and read their extracted full
 text; read and write item notes; manage tags, trash, and saved searches
-library-wide; and look up Zotero's own item-type/field schema. 36 tools
+library-wide; and look up Zotero's own item-type/field schema. 39 tools
 total — see [Tools](#tools) below for the full list.
 
 ## Why this exists
@@ -178,7 +178,7 @@ same as `/login`):
   across *all* tenants combined, recorded by a `tools/call` middleware
   (`_track_tool_call` in `app/mcp_server.py`). Deliberately no per-tenant or
   per-library breakdown anywhere in this response — that's what keeps it
-  safe to leave unauthenticated, unlike the 36 tools themselves. Counters
+  safe to leave unauthenticated, unlike the 39 tools themselves. Counters
   live in `app/metrics.py`, in-memory only: they reset to zero on every
   restart/redeploy, same as this isn't a metrics/analytics system, just a
   lightweight "is it up and roughly how busy is it" signal.
@@ -190,7 +190,7 @@ same as `/login`):
 
 ## Tools
 
-36 tools total, grouped by risk (see "Key safety" above before using any
+39 tools total, grouped by risk (see "Key safety" above before using any
 Destructive tool). Tools marked **✓** under **Version** require the
 item's/collection's current Zotero `version` (from
 `search_items`/`get_item`/`list_collections`) as an argument and refuse
@@ -255,9 +255,9 @@ exercised against `tests/fakes.py`'s in-memory `FakeZotero`, and
 
 ## Status
 
-**v2.1** — deployed and in active use, with full CRUD coverage of the
+**v2.2** — deployed and in active use, with full CRUD coverage of the
 Zotero Web API's item/collection/tag/trash/saved-search/schema surface
-(36 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
+(39 tools; see [Tools](#tools)). Add it as a remote MCP connector directly
 (e.g. Claude Desktop/claude.ai's "Add custom connector" with just the
 server's public URL) — the OAuth flow described above prompts for your
 own Zotero Library ID/Type/API Key in-browser, no manually-configured
