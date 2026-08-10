@@ -106,8 +106,9 @@ Optional in either mode:
 ```
 MCP_WEBSITE_URL         public site reported as serverInfo.website_url; also used to
                         build serverInfo.icons[0].src as MCP_WEBSITE_URL + "icons/icon.svg"
-                        (that file must actually be served there). Left unset, both
-                        fields are simply omitted.
+                        and the /login page's privacy policy link as
+                        MCP_WEBSITE_URL + "privacy.html" (both files must actually be
+                        served there). Left unset, all three are simply omitted.
 ```
 
 ## Deployment
@@ -330,6 +331,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 See [SECURITY.md](SECURITY.md) for the threat model and how to report a
 vulnerability.
+
+## Privacy
+
+See [Privacy Policy](https://herbertkokholm.dk/cite-caddy/privacy.html) for
+what the server stores when you sign in at `/login` (Zotero Library
+ID/Type/API key), how it's protected, and how to have it deleted.
 
 ## License
 

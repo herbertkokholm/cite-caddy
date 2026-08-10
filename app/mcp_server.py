@@ -346,9 +346,12 @@ if _PORT:
             t: " selected" if t == library_type else "" for t in ("user", "group")
         }
         icon_html = ""
+        privacy_html = ""
         if _WEBSITE_URL:
             icon_src = html.escape(f"{_WEBSITE_URL}icons/icon.svg")
             icon_html = f'<img src="{icon_src}" alt="" width="48" height="48">\n  '
+            privacy_href = html.escape(f"{_WEBSITE_URL}privacy.html")
+            privacy_html = f'<p class="hint"><a href="{privacy_href}">Privacy policy</a> -- what this server stores and how to have it deleted.</p>\n'
         return f"""<!doctype html>
 <title>Cite Caddy login</title>
 <style>
@@ -385,7 +388,7 @@ this server -- no separate sign-up.</p>
   (the key needs write permission for this project).</p>
   <button type="submit">Sign in</button>
 </form>
-"""
+{privacy_html}"""
 
     @mcp.custom_route("/login", methods=["GET"])
     async def login_form(request: Request) -> HTMLResponse:

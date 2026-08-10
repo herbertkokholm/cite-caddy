@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Cite Caddy</title>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <meta name="description"
+    content="What Cite Caddy stores when you sign in with your Zotero API key, how it's protected, and how to have it removed.">
+  <style>
+    :root,
+    :root[data-theme="dark"] {
+      --bg: #0f1420;
+      --panel: #171e2e;
+      --card: #1c2740;
+      --card2: #18223a;
+      --ink: #e8edf6;
+      --muted: #93a1c0;
+      --line: #2b3958;
+      --accent: #5b8cff;
+      --header-g1: #141b2b;
+      --header-g2: #101623;
+      --footer-fg: #5f6f90;
+      --footer-link: #8fa8d8;
+      --code-bg: #0d1420;
+      --code-fg: #cfe0ff;
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --card: #ffffff;
+      --card2: #eef1f8;
+      --ink: #1a2233;
+      --muted: #5a6a8a;
+      --line: #dbe1ee;
+      --accent: #3a63d8;
+      --header-g1: #ffffff;
+      --header-g2: #eef1f8;
+      --footer-fg: #7583a3;
+      --footer-link: #3a5aa8;
+      --code-bg: #eef1f8;
+      --code-fg: #1a3f99;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      transition: background .15s, color .15s
+    }
+
+    a {
+      color: var(--footer-link)
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(180deg, var(--header-g1), var(--header-g2));
+      border-bottom: 1px solid var(--line);
+      padding: 14px 24px
+    }
+
+    .htop {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 16px
+    }
+
+    .htop h1 {
+      font-size: 16px;
+      margin: 0;
+      font-weight: 650;
+      letter-spacing: .2px;
+      flex: 1
+    }
+
+    .htop nav {
+      display: flex;
+      gap: 18px;
+      font-size: 13.5px
+    }
+
+    .htop nav a {
+      color: var(--muted);
+      text-decoration: none
+    }
+
+    .htop nav a:hover {
+      color: var(--ink)
+    }
+
+    #themetog {
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      padding: 7px 11px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      cursor: pointer
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 24px
+    }
+
+    h2 {
+      font-size: clamp(24px, 4vw, 34px);
+      margin: 0 0 8px;
+      font-weight: 700;
+      letter-spacing: -.3px
+    }
+
+    .updated {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0 0 40px
+    }
+
+    section {
+      padding: 28px 0;
+      border-top: 1px solid var(--line)
+    }
+
+    section h3 {
+      font-size: 18px;
+      margin: 0 0 12px;
+      font-weight: 700
+    }
+
+    section p,
+    section li {
+      color: var(--muted);
+      font-size: 14.5px;
+      line-height: 1.65
+    }
+
+    section ul {
+      margin: 0;
+      padding-left: 20px
+    }
+
+    section li+li {
+      margin-top: 6px
+    }
+
+    code {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.92em
+    }
+
+    footer {
+      color: var(--footer-fg);
+      font-size: 12px;
+      text-align: center;
+      padding: 36px 24px 44px;
+      border-top: 1px solid var(--line);
+      margin-top: 20px
+    }
+
+    footer a {
+      color: var(--footer-link)
+    }
+
+    footer .links {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap
+    }
+  </style>
+  <script>
+    (function () {
+      var saved = localStorage.getItem('citecaddy-theme');
+      var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+</head>
+
+<body>
+
+  <header>
+    <div class="htop">
+      <img src="icons/icon.svg" alt="" width="24" height="24" style="border-radius: 6px; flex-shrink: 0;">
+      <h1>Cite Caddy</h1>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="https://github.com/herbertkokholm/cite-caddy" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <button id="themetog" type="button">Light</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h2>Privacy Policy</h2>
+    <p class="updated">Last updated 2026-08-10. Applies to the hosted Cite Caddy MCP server
+      (<code>citecaddy.herbertkokholm.dk</code>) and this site.</p>
+
+    <section>
+      <h3>What this server collects</h3>
+      <p>Cite Caddy is self-service: signing in at <code>/login</code> is how you connect your own
+        Zotero library, and it's the only place this server asks you for anything. That form
+        collects:</p>
+      <ul>
+        <li>Your Zotero <strong>Library ID</strong> and <strong>Library Type</strong> (user or group)</li>
+        <li>Your Zotero <strong>API key</strong> (needs write permission to use this server's tools)</li>
+      </ul>
+      <p>Nothing else is asked for — no name, no email, no account creation step separate from this.
+        The MCP client you connect with (e.g. Claude) also registers itself as an OAuth client
+        (client ID and redirect URI), which is standard OAuth 2.1 plumbing, not personal data about
+        you.</p>
+    </section>
+
+    <section>
+      <h3>How it's stored</h3>
+      <p>Your API key is encrypted at rest (Fernet, symmetric authenticated encryption) before being
+        written to the server's token store; it is never kept in plaintext on disk. Your Library
+        ID/Type are stored alongside it, unencrypted, since they aren't secret on their own. OAuth
+        access and refresh tokens issued to your MCP client are stored the same way, and are
+        short-lived.</p>
+    </section>
+
+    <section>
+      <h3>How it's used</h3>
+      <p>Your stored credentials are used for exactly one thing: routing your authenticated tool
+        calls to your own Zotero library via Zotero's Web API, on your behalf. This server is a
+        pass-through — it does not read, analyze, or retain copies of your library's contents beyond
+        what's needed to serve each individual request, and it does not sell or share your data with
+        anyone.</p>
+      <p>Calls this server makes to Zotero on your behalf are subject to
+        <a href="https://www.zotero.org/support/privacy" target="_blank" rel="noopener">Zotero's own
+          privacy policy</a> — the same as if you'd used the Zotero app or website directly.</p>
+    </section>
+
+    <section>
+      <h3>Aggregate metrics</h3>
+      <p>The public <code>/status</code> endpoint reports server uptime, the total number of onboarded
+        tenants, and per-tool call/error counts. These are counts only — no library identity, no tool
+        arguments, and no library contents are included or ever exposed there.</p>
+    </section>
+
+    <section>
+      <h3>This website</h3>
+      <p>This landing page (<code>herbertkokholm.dk/cite-caddy/</code>) is static, hosted on GitHub
+        Pages, and runs no analytics, tracking scripts, or cookies of its own. See
+        <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement"
+          target="_blank" rel="noopener">GitHub's own privacy statement</a> for what GitHub Pages
+        itself may log (e.g. standard web server request logs).</p>
+    </section>
+
+    <section>
+      <h3>Deleting your data</h3>
+      <p>Revoking your Zotero API key from
+        <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">Zotero's own
+          settings</a> immediately stops this server from being able to act on your library, at any
+        time. To have your stored tenant record (encrypted key, Library ID/Type) deleted from the
+        server entirely, contact the maintainer — see
+        <a href="https://github.com/herbertkokholm/cite-caddy/security/advisories/new" target="_blank"
+          rel="noopener">GitHub's private reporting form</a> or the email on the
+        <a href="https://github.com/herbertkokholm" target="_blank" rel="noopener">maintainer's GitHub
+          profile</a>.</p>
+    </section>
+
+    <section>
+      <h3>Changes to this policy</h3>
+      <p>This is a small, solo-maintained project. If this policy changes, the "last updated" date
+        above will change with it — check the
+        <a href="https://github.com/herbertkokholm/cite-caddy/commits/main/docs/privacy.html"
+          target="_blank" rel="noopener">file history on GitHub</a> for the exact diff.</p>
+    </section>
+  </div>
+
+  <footer>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="https://github.com/herbertkokholm/cite-caddy" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    Cite Caddy — MIT licensed.
+  </footer>
+
+  <script>
+    var themetog = document.getElementById('themetog');
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('citecaddy-theme', t);
+      themetog.textContent = t === 'dark' ? 'Light' : 'Dark';
+    }
+    setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    themetog.onclick = function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); };
+  </script>
+</body>
+
+</html>

@@ -59,3 +59,8 @@ Relevant things to know when assessing impact:
   [`CONTRIBUTING.md`](CONTRIBUTING.md#data-and-secrets). Tenants' own
   Zotero API keys are supplied at runtime through the login form, not via
   env vars, and are encrypted at rest as noted above.
+
+This document covers the threat model for reporting vulnerabilities. For
+what's collected/stored about *you* as a tenant and how to have it deleted,
+see the [Privacy Policy](https://herbertkokholm.dk/cite-caddy/privacy.html)
+instead.
