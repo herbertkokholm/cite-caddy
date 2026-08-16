@@ -2,6 +2,10 @@
 
 [![cite-caddy MCP server](https://glama.ai/mcp/servers/herbertkokholm/cite-caddy/badges/score.svg)](https://glama.ai/mcp/servers/herbertkokholm/cite-caddy)
 [![smithery badge](https://smithery.ai/badge/herbertkokholm/cite-caddy)](https://smithery.ai/servers/herbertkokholm/cite-caddy)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-listed-blue)](https://registry.modelcontextprotocol.io)
+[![Lint](https://img.shields.io/github/actions/workflow/status/herbertkokholm/cite-caddy/lint.yml?branch=main&label=lint)](https://github.com/herbertkokholm/cite-caddy/actions/workflows/lint.yml)
+[![Latest release](https://img.shields.io/github/v/release/herbertkokholm/cite-caddy)](https://github.com/herbertkokholm/cite-caddy/releases)
+[![License: MIT](https://img.shields.io/github/license/herbertkokholm/cite-caddy)](LICENSE)
 
 A reference-library bridge for AI assistants — a standalone, remote MCP
 server.
