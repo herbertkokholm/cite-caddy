@@ -181,7 +181,7 @@ wheels = [
 
 [[package]]
 name = "cite-caddy"
-version = "2.1.0"
+version = "2.3.2"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -730,7 +730,7 @@ wheels = [
 
 [[package]]
 name = "pyzotero"
-version = "1.13.3"
+version = "1.13.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bibtexparser" },
@@ -738,9 +738,9 @@ dependencies = [
     { name = "httpx" },
     { name = "whenever" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6b/ad/df65faf44025486ab85c81bd2506935f0a0fe2b6b891088943b5f988860a/pyzotero-1.13.3.tar.gz", hash = "sha256:a9ff1c3f633f5365f23f7a6e7b98e05cec44e09bc249d91d21d5cf360f86871f", size = 555857, upload-time = "2026-07-28T08:32:03.636Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/64/9a/f3857739e53da034c65409c827851081766afcb24b86a8a4c466902d18ab/pyzotero-1.13.4.tar.gz", hash = "sha256:1b7e56fbe8e56e3d3aa55b650f5a847231571e2284f285588744a8420a800470", size = 556682, upload-time = "2026-08-05T17:26:22.571Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1f/23/00a66045646ef56b64a1797764ece5f309e35ec13c026293ca19b065a0da/pyzotero-1.13.3-py3-none-any.whl", hash = "sha256:323ba09a7a4341a70ed2289874b5d5a17d5501160d51041c242c549c81d4ffbe", size = 52040, upload-time = "2026-07-28T08:32:02.145Z" },
+    { url = "https://files.pythonhosted.org/packages/35/e7/12df05bfdfc5284768eb3fdb5ecfcd4eafa31da1cd4ea030bb24ad3ebc57/pyzotero-1.13.4-py3-none-any.whl", hash = "sha256:11d799a0aca46f62aabd422a12ab54ea160898ffaa8fdb1784ea7474c616fff3", size = 52249, upload-time = "2026-08-05T17:26:21.306Z" },
 ]
 
 [[package]]
