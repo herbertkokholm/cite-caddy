@@ -53,6 +53,7 @@ import html
 import os
 from importlib.metadata import version as _pkg_version
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -62,6 +63,7 @@ from mcp.server.auth.settings import (
     RevocationOptions,
 )
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon, Tool, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import (
@@ -1368,6 +1370,20 @@ def move_item_to_different_library(
     )
 
 
+def _http_transport_security(public_url: str) -> TransportSecuritySettings:
+    """DNS-rebinding protection for streamable-http, scoped to this
+    server's own public URL. The mcp SDK ships this middleware but leaves
+    it disabled by default for backwards compatibility (see
+    TransportSecurityMiddleware.__init__) -- it has to be opted into
+    explicitly per deployment, which this server wasn't doing."""
+    host = urlparse(public_url).netloc
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[host],
+        allowed_origins=[public_url],
+    )
+
+
 def main() -> None:
     if not _PORT:
         Settings.from_env()  # stdio mode: fail fast at startup, not on first tool call
@@ -1378,6 +1394,7 @@ def main() -> None:
             host="0.0.0.0",
             port=int(_PORT),
             stateless_http=True,
+            transport_security=_http_transport_security(_http_settings.public_url),
         )
 
 
