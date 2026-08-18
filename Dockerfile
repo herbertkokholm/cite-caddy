@@ -4,7 +4,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock README.md glama.json ./
+COPY pyproject.toml uv.lock README.md glama.json llms.txt ./
 COPY app ./app
 
 # --frozen: install exactly what's pinned in uv.lock (fail instead of

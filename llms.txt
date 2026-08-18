@@ -1,0 +1,16 @@
+# Cite Caddy
+
+> Remote MCP server for full read/write access to a Zotero library: search, add, tag, update, delete, and move items; create/rename/delete collections; manage tags, attachments, notes, saved searches, and trash library-wide. Independent, unofficial project — not affiliated with, endorsed by, or sponsored by Zotero.
+
+## Docs
+
+- [README](https://github.com/herbertkokholm/cite-caddy/blob/main/README.md): Full documentation — configuration, deployment, the 39-tool reference, and the key-safety note on delete/move breaking Word-document citations
+- [MCP server card](https://citecaddy.herbertkokholm.dk/.well-known/mcp/server-card.json): Live, machine-readable tool catalog, generated from the running server
+- [MCP Registry manifest](https://github.com/herbertkokholm/cite-caddy/blob/main/server.json)
+- [Security policy](https://github.com/herbertkokholm/cite-caddy/blob/main/SECURITY.md)
+- [Privacy policy](https://herbertkokholm.dk/cite-caddy/privacy.html): What's stored when signing in at `/login`, and how to have it deleted
+
+## Optional
+
+- [Landing page](https://herbertkokholm.dk/cite-caddy/)
+- [glama.json](https://citecaddy.herbertkokholm.dk/.well-known/glama.json)

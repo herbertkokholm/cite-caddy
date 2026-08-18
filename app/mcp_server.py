@@ -272,6 +272,15 @@ if _PORT:
         though the maintainers list is right there in the repo."""
         return JSONResponse(json.loads(_GLAMA_JSON_PATH.read_text()))
 
+    _LLMS_TXT_PATH = Path(__file__).resolve().parent.parent / "llms.txt"
+
+    @mcp.custom_route("/llms.txt", methods=["GET"])
+    async def llms_txt(request: Request) -> Response:
+        """Serves the repo-root llms.txt (llmstxt.org convention: a
+        robots.txt-style, LLM-readable summary + links) at this server's
+        own site root, since that's the convention's expected location."""
+        return Response(_LLMS_TXT_PATH.read_text(), media_type="text/markdown")
+
     async def _track_tool_call(
         ctx: ServerRequestContext[Any, Any], call_next: CallNext
     ) -> HandlerResult:
