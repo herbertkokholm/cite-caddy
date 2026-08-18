@@ -50,8 +50,10 @@ Env vars (see README's "Configuration" section):
 from __future__ import annotations
 
 import html
+import json
 import os
 from importlib.metadata import version as _pkg_version
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -257,6 +259,27 @@ if _PORT:
         tool registry.
         """
         return JSONResponse(await _server_card_data())
+
+    _GLAMA_JSON_PATH = Path(__file__).resolve().parent.parent / "glama.json"
+
+    @mcp.custom_route("/.well-known/glama.json", methods=["GET"])
+    async def glama_well_known(request: Request) -> JSONResponse:
+        """Serves this repo's own glama.json (already read from GitHub by
+        Glama.ai for the separate glama.ai/mcp/servers/... repo-based
+        grading) at the live URL too -- required for the
+        glama.ai/mcp/connectors/... Connector listing to verify ownership;
+        without this, that page reports no ownership verification even
+        though the maintainers list is right there in the repo."""
+        return JSONResponse(json.loads(_GLAMA_JSON_PATH.read_text()))
+
+    _LLMS_TXT_PATH = Path(__file__).resolve().parent.parent / "llms.txt"
+
+    @mcp.custom_route("/llms.txt", methods=["GET"])
+    async def llms_txt(request: Request) -> Response:
+        """Serves the repo-root llms.txt (llmstxt.org convention: a
+        robots.txt-style, LLM-readable summary + links) at this server's
+        own site root, since that's the convention's expected location."""
+        return Response(_LLMS_TXT_PATH.read_text(), media_type="text/markdown")
 
     async def _track_tool_call(
         ctx: ServerRequestContext[Any, Any], call_next: CallNext
