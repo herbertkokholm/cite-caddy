@@ -730,7 +730,7 @@ wheels = [
 
 [[package]]
 name = "pyzotero"
-version = "1.13.6"
+version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bibtexparser" },
@@ -738,9 +738,9 @@ dependencies = [
     { name = "httpx" },
     { name = "whenever" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e3/99/a434a95c4198c9f804554eae5f44aefe586461b84f92219f8d3b8aef53df/pyzotero-1.13.6.tar.gz", hash = "sha256:fac1f1fc316c49cd4ab24ff0bc73d9d19e0a970ccb97844bab73efdf3a887aaf", size = 558828, upload-time = "2026-08-13T17:19:23.3Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/2d/7f53cf7a0f422758ffb0ad36c08c84b3458e61d0f93a1306d440f5f4740a/pyzotero-1.14.0.tar.gz", hash = "sha256:7cdb33c7a592b86502660ed1ef51886af72a23f5d467b711294522044f41d78b", size = 576974, upload-time = "2026-08-18T09:45:14.032Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/bb/3ba4d924a4d1a7d0906e6504eeebe5aec9fe271929ea7a36dda54dd204aa/pyzotero-1.13.6-py3-none-any.whl", hash = "sha256:282224915c06eafc433fc31dd51eb47a35fd655609c9ee164209ca9c88cf252e", size = 53565, upload-time = "2026-08-13T17:19:21.983Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/34/488df35f6d33de5d97828defd971be124e31cbe533f74479741ed4942dfa/pyzotero-1.14.0-py3-none-any.whl", hash = "sha256:394a14f074c417055fceaa2970b594ce925a6094c9d3dcc8a734e07426ecf415", size = 63202, upload-time = "2026-08-18T09:45:12.356Z" },
 ]
 
 [[package]]
