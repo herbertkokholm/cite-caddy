@@ -113,6 +113,9 @@ MCP_WEBSITE_URL         public site reported as serverInfo.website_url; also use
                         and the /login page's privacy policy link as
                         MCP_WEBSITE_URL + "privacy.html" (both files must actually be
                         served there). Left unset, all three are simply omitted.
+MCP_SECURITY_CONTACT    security contact (email or URI) served as /.well-known/security.txt
+                        (RFC 9116), e.g. for MCPBundles' ownership verification. Left
+                        unset, that path 404s.
 ```
 
 ## Deployment
@@ -193,6 +196,10 @@ same as `/login`):
   per-tool call/error counts) for a human checking in a browser rather
   than a script. Icon only renders when `MCP_WEBSITE_URL` is set, same
   as `/login`'s.
+- **`/.well-known/security.txt`** — RFC 9116 security contact, only when
+  `MCP_SECURITY_CONTACT` is set (404 otherwise). `Expires` is computed per
+  request as one year out, so it never goes stale. MCPBundles reads this to
+  verify ownership when publishing the server to its directory.
 - **`/.well-known/mcp/server-card.json`** — a pre-connection discovery
   document (server identity, auth requirements, and the full tool list
   with schemas), generated live from the actual tool registry on every
