@@ -45,6 +45,8 @@ Env vars (see README's "Configuration" section):
     MCP_DATA_DIR           where OAuth clients/tokens/tenants persist (default: ./.data)
     MCP_WEBSITE_URL        optional; if set, this server's website_url/icons/icon.svg
                             is reported in serverInfo (icons.src is this + "icons/icon.svg")
+    MCP_SECURITY_CONTACT   optional; if set, /.well-known/security.txt is served with
+                            this as its Contact (a mailto: is added if it's a bare email)
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ from __future__ import annotations
 import html
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
@@ -271,6 +274,32 @@ if _PORT:
         without this, that page reports no ownership verification even
         though the maintainers list is right there in the repo."""
         return JSONResponse(json.loads(_GLAMA_JSON_PATH.read_text()))
+
+    _SECURITY_CONTACT = os.environ.get("MCP_SECURITY_CONTACT")
+
+    @mcp.custom_route("/.well-known/security.txt", methods=["GET"])
+    async def security_txt(request: Request) -> PlainTextResponse:
+        """RFC 9116 security.txt -- also what MCPBundles' "Publish your MCP
+        server" flow reads to verify ownership (it emails a code to the
+        Contact address here). Opt-in via MCP_SECURITY_CONTACT, so a
+        self-hosted deployment never publishes this repo's maintainer's
+        address as its own; 404 when unset. Expires is always a year out,
+        computed per request, so it can't silently go stale."""
+        if not _SECURITY_CONTACT:
+            return PlainTextResponse("Not Found", status_code=404)
+        contact = _SECURITY_CONTACT
+        if "@" in contact and ":" not in contact:
+            contact = f"mailto:{contact}"
+        expires = (datetime.now(timezone.utc) + timedelta(days=365)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        body = (
+            f"Contact: {contact}\n"
+            f"Expires: {expires}\n"
+            "Policy: https://github.com/herbertkokholm/cite-caddy/blob/main/SECURITY.md\n"
+            f"Canonical: {_http_settings.public_url}/.well-known/security.txt\n"
+        )
+        return PlainTextResponse(body)
 
     _LLMS_TXT_PATH = Path(__file__).resolve().parent.parent / "llms.txt"
 
