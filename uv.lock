@@ -4,8 +4,8 @@ requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform != 'win32'",
-    "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'win32'",
     "(python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32') or (python_full_version == '3.11.*' and sys_platform == 'emscripten')",
     "python_full_version < '3.11' and sys_platform == 'win32'",
     "python_full_version < '3.11' and sys_platform != 'win32'",
@@ -704,7 +704,7 @@ wheels = [
 
 [[package]]
 name = "pyzotero"
-version = "1.15.1"
+version = "1.15.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bibtexparser" },
@@ -712,9 +712,9 @@ dependencies = [
     { name = "httpx2" },
     { name = "whenever" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/0e/b98ce946c400006b169eb5e30635fac95242910579371a9d974c9e36c097/pyzotero-1.15.1.tar.gz", hash = "sha256:e4975a165d7b379b071102933c2001668de8c2dd10c21c4d1b456ab03174ba8e", size = 589183, upload-time = "2026-08-30T13:30:31.43Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/c5/bb2688452fbcc0e2e58570ded39cb171c51c3ccb168717d7d7d6a7fbf70c/pyzotero-1.15.2.tar.gz", hash = "sha256:9affddd556ccfff88187fa0340ed3b36cb995ec3d1add5d697ae089b1f4ceaf2", size = 589281, upload-time = "2026-09-18T21:37:53.025Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/6a/aa71f0a64245046d27661df500b3eb6904d93ae71574dbe1ff9cb045bcb3/pyzotero-1.15.1-py3-none-any.whl", hash = "sha256:1580de865d20ce1ed22395cdf1ec365652fb4c79282ec6ed58bc5e77450e93f2", size = 69923, upload-time = "2026-08-30T13:30:29.535Z" },
+    { url = "https://files.pythonhosted.org/packages/56/6a/dce5377f1ddbb7e31c97c9607614c7072b61b63f9c704972521625057fd7/pyzotero-1.15.2-py3-none-any.whl", hash = "sha256:f793ac4163efce4b882c4c18bd9a395fe64ca009d7573afceec154fde1bedcdf", size = 67345, upload-time = "2026-09-18T21:37:51.404Z" },
 ]
 
 [[package]]
@@ -865,8 +865,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform != 'win32'",
-    "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'win32'",
     "(python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32') or (python_full_version == '3.11.*' and sys_platform == 'emscripten')",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/aa/2a/9618a122aeb2a169a28b03889a2995fe297588964333d4a7d67bdf46e147/rpds_py-2026.6.3.tar.gz", hash = "sha256:1cebd1337c242e4ec2293e541f712b2da849b29f48f0c293684b71c0632625d4", size = 64051, upload-time = "2026-06-30T07:17:53.009Z" }
