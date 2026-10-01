@@ -85,6 +85,7 @@ from app.oauth_provider import (
     CiteCaddyOAuthProvider,
     InvalidCredentialsError,
     LoginSessionExpiredError,
+    PendingAuthorization,
 )
 from app.oauth_store import TokenStore
 from app.zotero_service import ZoteroService
@@ -372,6 +373,8 @@ if _PORT:
   table {{ width: 100%; border-collapse: collapse; margin: 1.5rem 0; }}
   th, td {{ text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #ddd; }}
   .hint {{ color: #666; font-size: 0.9em; }}
+  .client {{ border: 1px solid #ccc; border-radius: 6px; padding: 0 1rem; margin: 1rem 0; }}
+  .destination {{ word-break: break-all; }}
 </style>
 <h1>{icon_html}Cite Caddy</h1>
 <table>
@@ -389,8 +392,44 @@ if _PORT:
     async def status_html(request: Request) -> HTMLResponse:
         return HTMLResponse(_status_page(_status_data()))
 
+    def _redirect_destination(redirect_uri: str) -> str:
+        """What the login page names as "where you'll be sent back to":
+        just the host for http(s) redirects, scheme://host for native-app
+        custom schemes (e.g. cursor://...), where the scheme is the
+        recognizable part."""
+        parts = urlparse(redirect_uri)
+        if parts.scheme in ("http", "https"):
+            return parts.netloc
+        return f"{parts.scheme}://{parts.netloc}"
+
+    def _client_html(pending: PendingAuthorization) -> str:
+        """The "who's asking" block on the login page. Clients register
+        themselves without any review (RFC 7591 DCR is open, and
+        unregistered client_ids are auto-provisioned -- see
+        app/oauth_provider.py's _FlexibleClientInformation), so anyone can
+        mint a client with an arbitrary redirect_uri and mail a victim an
+        /authorize link pointing here. Showing where the authorization
+        code is about to go is what lets the user spot that."""
+        destination = html.escape(
+            _redirect_destination(str(pending.params.redirect_uri))
+        )
+        name_html = ""
+        if pending.client_name:
+            name = html.escape(pending.client_name[:80])
+            name_html = (
+                f"<p>Requested by <strong>{name}</strong> "
+                '<span class="hint">(name supplied by the app, not verified)</span></p>\n'
+            )
+        return f"""<div class="client">
+{name_html}<p>After signing in you'll be sent back to
+<strong class="destination">{destination}</strong>, which gets access to your Zotero library.</p>
+<p class="hint">Only continue if you started this connection yourself from
+your own MCP client and recognize that destination.</p>
+</div>"""
+
     def _login_page(
         login_id: str,
+        pending: PendingAuthorization,
         error: str | None = None,
         library_id: str = "",
         library_type: str = "user",
@@ -416,6 +455,8 @@ if _PORT:
   button {{ padding: 0.5rem 1.5rem; }}
   .error {{ color: #b00020; }}
   .hint {{ color: #666; font-size: 0.9em; }}
+  .client {{ border: 1px solid #ccc; border-radius: 6px; padding: 0 1rem; margin: 1rem 0; }}
+  .destination {{ word-break: break-all; }}
 </style>
 <header>
   {icon_html}<h1>Cite Caddy</h1>
@@ -423,6 +464,7 @@ if _PORT:
 <p>Connect this MCP client to your own Zotero library. Signing in with a
 valid Zotero API key both grants access and registers your library with
 this server -- no separate sign-up.</p>
+{_client_html(pending)}
 {error_html}
 <form method="post" action="/login">
   <input type="hidden" name="login_id" value="{html.escape(login_id)}">
@@ -449,10 +491,10 @@ this server -- no separate sign-up.</p>
         login_id = request.query_params.get("login_id", "")
         try:
             assert _oauth_provider is not None
-            _oauth_provider.get_pending(login_id)
+            pending = _oauth_provider.get_pending(login_id)
         except LoginSessionExpiredError as e:
             return HTMLResponse(f"<p>{html.escape(str(e))}</p>", status_code=400)
-        return HTMLResponse(_login_page(login_id))
+        return HTMLResponse(_login_page(login_id, pending))
 
     @mcp.custom_route("/login", methods=["POST"])
     async def login_submit(request: Request) -> Response:
@@ -463,6 +505,9 @@ this server -- no separate sign-up.</p>
         api_key = str(form.get("api_key", ""))
         assert _oauth_provider is not None
         try:
+            # Fetched up front so a failed login can re-render the page
+            # (with its redirect destination) below.
+            pending = _oauth_provider.get_pending(login_id)
             redirect_url = await _oauth_provider.complete_login(
                 login_id, library_id, library_type, api_key
             )
@@ -472,6 +517,7 @@ this server -- no separate sign-up.</p>
             return HTMLResponse(
                 _login_page(
                     login_id,
+                    pending,
                     error=str(e),
                     library_id=library_id,
                     library_type=library_type,

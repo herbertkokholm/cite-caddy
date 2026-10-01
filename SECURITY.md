@@ -41,6 +41,13 @@ Relevant things to know when assessing impact:
   clients (see `_FlexibleClientInformation`'s docstring for why that
   trade-off was made). A bug in the login-form gate itself, or in
   access-token verification, is high severity.
+- Because of that, anyone can register a client (or just pick a
+  `client_id`) with their own `redirect_uri` and send someone an
+  `/authorize` link. This is expected and isn't a vulnerability on its own:
+  the login page shows the redirect destination (and the client's
+  self-reported, unverified name) so the user can see where the
+  authorization code will go. A bug that hid, spoofed or misrepresented
+  that destination *would* be a security issue.
 - Onboarded tenants' Zotero API keys are encrypted at rest
   (`app/oauth_store.py`'s `TokenStore`, via `MCP_TOKEN_STORE_KEY`,
   a Fernet key). A bug that stored a key in plaintext, or that let one
