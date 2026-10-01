@@ -89,9 +89,18 @@ class PendingAuthorization:
     in-memory only (not persisted): if the container restarts mid-login,
     the user just retries -- not worth persisting a half-finished flow."""
 
-    def __init__(self, client_id: str, params: AuthorizationParams) -> None:
+    def __init__(
+        self,
+        client_id: str,
+        params: AuthorizationParams,
+        client_name: str | None = None,
+    ) -> None:
         self.client_id = client_id
         self.params = params
+        # Self-reported via /register, so unverified -- shown on the login
+        # page only as a hint next to the redirect destination, which is
+        # what actually decides who receives the authorization code.
+        self.client_name = client_name
         self.created_at = time.time()
 
 
@@ -134,7 +143,9 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
         login_id = secrets.token_urlsafe(24)
-        self._pending[login_id] = PendingAuthorization(client.client_id, params)
+        self._pending[login_id] = PendingAuthorization(
+            client.client_id, params, client.client_name
+        )
         return f"/login?login_id={login_id}"
 
     def get_pending(self, login_id: str) -> PendingAuthorization:

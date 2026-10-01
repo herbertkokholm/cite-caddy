@@ -507,3 +507,100 @@ def test_login_page_shows_icon_when_website_url_configured(
     body = _login_page_response(client).text
 
     assert '<img src="https://example.test/icons/icon.svg"' in body
+
+
+# ---- login page: who's asking ---------------------------------------------
+# DCR is open and unregistered client_ids are auto-provisioned, so anyone
+# can point an /authorize link at an arbitrary redirect_uri. The login page
+# must name where the authorization code is going so the user can spot it.
+
+
+def _login_id_for(
+    client: TestClient, redirect_uri: str, client_name: str | None = None
+) -> str:
+    registration: dict = {
+        "redirect_uris": [redirect_uri],
+        "token_endpoint_auth_method": "none",
+    }
+    if client_name is not None:
+        registration["client_name"] = client_name
+    resp = client.post("/register", json=registration)
+    assert resp.status_code == 201, resp.text
+    _, challenge = _code_verifier_and_challenge()
+    authorize_resp = client.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": resp.json()["client_id"],
+            "redirect_uri": redirect_uri,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    return authorize_resp.headers["location"].split("login_id=")[1]
+
+
+def test_login_page_shows_redirect_destination_host(client):
+    login_id = _login_id_for(client, "https://attacker-alpha.example.com/cb")
+
+    body = client.get(f"/login?login_id={login_id}").text
+
+    assert '<strong class="destination">attacker-alpha.example.com</strong>' in body
+    assert "/cb" not in body
+
+
+def test_login_page_shows_custom_scheme_destination(client):
+    login_id = _login_id_for(client, "cursor://anysphere.cursor-retrieval/oauth")
+
+    body = client.get(f"/login?login_id={login_id}").text
+
+    assert "cursor://anysphere.cursor-retrieval" in body
+
+
+def test_login_page_shows_destination_for_auto_provisioned_client(client):
+    _, challenge = _code_verifier_and_challenge()
+    authorize_resp = client.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "some-unregistered-client-id",
+            "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+
+    body = client.get(authorize_resp.headers["location"]).text
+
+    assert '<strong class="destination">claude.ai</strong>' in body
+    assert "Requested by" not in body
+
+
+def test_login_page_shows_client_name_as_unverified_and_escaped(client):
+    login_id = _login_id_for(
+        client, "https://claude.example/callback", client_name="<b>Claude</b>"
+    )
+
+    body = client.get(f"/login?login_id={login_id}").text
+
+    assert "Requested by <strong>&lt;b&gt;Claude&lt;/b&gt;</strong>" in body
+    assert "not verified" in body
+
+
+def test_login_error_page_still_shows_redirect_destination(client):
+    login_id = _login_id_for(client, "https://attacker-alpha.example.com/cb")
+
+    resp = client.post(
+        "/login",
+        data={
+            "login_id": login_id,
+            "library_id": "123",
+            "library_type": "user",
+            "api_key": "wrong-key",
+        },
+    )
+
+    assert resp.status_code == 401
+    assert "attacker-alpha.example.com" in resp.text
