@@ -41,6 +41,7 @@ from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
     AuthorizationParams,
+    AuthorizeError,
     OAuthAuthorizationServerProvider,
     RefreshToken,
     construct_redirect_uri,
@@ -50,6 +51,7 @@ from mcp.shared.auth import (
     OAuthClientInformationFull,
     OAuthToken,
 )
+from pydantic import AnyHttpUrl, ValidationError
 from pyzotero import zotero
 
 from app.oauth_store import TokenStore
@@ -113,8 +115,15 @@ class LoginSessionExpiredError(Exception):
 
 
 class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
-    def __init__(self, store: TokenStore, issuer_url: str) -> None:
+    def __init__(
+        self, store: TokenStore, issuer_url: str, resource_url: str | None = None
+    ) -> None:
         self._store = store
+        # RFC 8707 resource every token is bound to (the MCP endpoint, i.e.
+        # AuthSettings.resource_server_url). app/mcp_server.py runs with
+        # validate_token_resource=True, so the SDK rejects any bearer token
+        # whose AccessToken.resource isn't this.
+        self._resource_url = resource_url or f"{issuer_url.rstrip('/')}/mcp"
         # Sent back as `iss` on the authorization redirect (RFC 9207); must
         # match the `issuer` in /.well-known/oauth-authorization-server.
         self._issuer_url = issuer_url
@@ -142,9 +151,30 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
 
     # ---- authorize -> first-party login form ---------------------------
 
+    def _same_resource(self, resource: str) -> bool:
+        """URL comparison mirroring the SDK's BearerAuthBackend: case and
+        default-port spelling don't matter, nor does a trailing slash."""
+        try:
+            normalized = str(AnyHttpUrl(resource))
+        except ValidationError:
+            return False
+        return normalized.removesuffix("/") == str(
+            AnyHttpUrl(self._resource_url)
+        ).removesuffix("/")
+
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
+        # Clients that omit `resource` (it's optional in RFC 8707, and not
+        # every MCP client sends it) get the one resource this server has.
+        # A resource naming anything else is refused up front rather than
+        # issuing a token the bearer check would reject anyway.
+        if params.resource is not None and not self._same_resource(params.resource):
+            raise AuthorizeError(
+                error="invalid_target",
+                error_description=f"Unknown resource; expected {self._resource_url}",
+            )
+        params = params.model_copy(update={"resource": self._resource_url})
         login_id = secrets.token_urlsafe(24)
         self._pending[login_id] = PendingAuthorization(
             client.client_id, params, client.client_name
@@ -238,7 +268,10 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
     ) -> OAuthToken:
         self._store.delete("auth_codes", authorization_code.code)
         return self._issue_tokens(
-            client.client_id, authorization_code.scopes, authorization_code.subject
+            client.client_id,
+            authorization_code.scopes,
+            authorization_code.subject,
+            authorization_code.resource or self._resource_url,
         )
 
     # ---- refresh tokens --------------------------------------------------
@@ -247,7 +280,15 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> RefreshToken | None:
         data = self._store.get("refresh_tokens", refresh_token)
-        return RefreshToken.model_validate(data) if data else None
+        if not data:
+            return None
+        token = RefreshToken.model_validate(data)
+        # Refresh tokens issued before 2.3.13 carry no resource and never
+        # expire; they were only ever issued for this server, so treat them
+        # as bound to it instead of locking those users out.
+        if token.resource is None:
+            token.resource = self._resource_url
+        return token
 
     async def exchange_refresh_token(
         self,
@@ -257,11 +298,14 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
     ) -> OAuthToken:
         self._store.delete("refresh_tokens", refresh_token.token)
         return self._issue_tokens(
-            client.client_id, scopes or refresh_token.scopes, refresh_token.subject
+            client.client_id,
+            scopes or refresh_token.scopes,
+            refresh_token.subject,
+            refresh_token.resource or self._resource_url,
         )
 
     def _issue_tokens(
-        self, client_id: str, scopes: list[str], subject: str | None
+        self, client_id: str, scopes: list[str], subject: str | None, resource: str
     ) -> OAuthToken:
         access_token = secrets.token_urlsafe(32)
         refresh_token = secrets.token_urlsafe(32)
@@ -275,6 +319,7 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
                 client_id=client_id,
                 scopes=scopes,
                 expires_at=expires_at,
+                resource=resource,
                 subject=subject,
             ).model_dump(mode="json"),
         )
@@ -286,6 +331,7 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
                 client_id=client_id,
                 scopes=scopes,
                 expires_at=None,
+                resource=resource,
                 subject=subject,
             ).model_dump(mode="json"),
         )
@@ -310,6 +356,10 @@ class CiteCaddyOAuthProvider(OAuthAuthorizationServerProvider):
         ):
             self._store.delete("access_tokens", token)
             return None
+        # Same legacy backfill as load_refresh_token (pre-2.3.13 access
+        # tokens live at most ACCESS_TOKEN_TTL_SECONDS past the deploy).
+        if access_token.resource is None:
+            access_token.resource = self._resource_url
         return access_token
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
