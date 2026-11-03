@@ -165,7 +165,9 @@ if _PORT:
         fernet_key=_http_settings.token_store_key,
     )
     _oauth_provider = CiteCaddyOAuthProvider(
-        store=_token_store, issuer_url=_http_settings.public_url
+        store=_token_store,
+        issuer_url=_http_settings.public_url,
+        resource_url=f"{_http_settings.public_url}/mcp",
     )
     mcp = MCPServer(
         "Cite Caddy",
@@ -177,6 +179,13 @@ if _PORT:
         auth=AuthSettings(
             issuer_url=_http_settings.public_url,
             resource_server_url=f"{_http_settings.public_url}/mcp",
+            # Reject bearer tokens not bound to this resource (RFC 8707);
+            # mcp 3.0 makes this the default. CiteCaddyOAuthProvider binds
+            # every token to resource_server_url -- including for clients
+            # that omit `resource`, and for legacy tokens issued without
+            # one -- so no existing user is locked out. See
+            # tests/test_token_resource_validation.py.
+            validate_token_resource=True,
             client_registration_options=ClientRegistrationOptions(enabled=True),
             revocation_options=RevocationOptions(enabled=True),
         ),

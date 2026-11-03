@@ -1,6 +1,6 @@
 [project]
 name = "cite-caddy"
-version = "2.3.12"
+version = "2.3.13"
 description = "Remote MCP server for full read/write access to a Zotero library"
 readme = "README.md"
 license = "MIT"
@@ -25,3 +25,4 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

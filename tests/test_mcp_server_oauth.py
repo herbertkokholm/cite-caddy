@@ -608,3 +608,116 @@ def test_login_error_page_still_shows_redirect_destination(client):
 
     assert resp.status_code == 401
     assert "attacker-alpha.example.com" in resp.text
+
+
+# ---- RFC 8707 resource binding (validate_token_resource=True) ---------
+
+
+def test_validate_token_resource_is_enabled(http_mcp_server):
+    auth = http_mcp_server.mcp.settings.auth
+    assert auth.validate_token_resource is True
+    assert str(auth.resource_server_url) == "https://example.test/mcp"
+
+
+def _bearer_token_for(client: TestClient, resource: str | None) -> str:
+    from urllib.parse import parse_qs, urlparse
+
+    client_info = _register_client(client)
+    verifier, challenge = _code_verifier_and_challenge()
+    params = {
+        "response_type": "code",
+        "client_id": client_info["client_id"],
+        "redirect_uri": "https://claude.example/callback",
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "state": "abc123",
+    }
+    if resource is not None:
+        params["resource"] = resource
+    authorize_resp = client.get("/authorize", params=params, follow_redirects=False)
+    login_id = authorize_resp.headers["location"].split("login_id=")[1]
+    login_resp = client.post(
+        "/login",
+        data={
+            "login_id": login_id,
+            "library_id": "123",
+            "library_type": "user",
+            "api_key": "valid-key",
+        },
+        follow_redirects=False,
+    )
+    code = parse_qs(urlparse(login_resp.headers["location"]).query)["code"][0]
+    token_resp = client.post(
+        "/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "https://claude.example/callback",
+            "client_id": client_info["client_id"],
+            "code_verifier": verifier,
+        },
+    )
+    assert token_resp.status_code == 200, token_resp.text
+    return token_resp.json()["access_token"]
+
+
+@pytest.mark.parametrize(
+    "resource", ["https://example.test/mcp", "https://example.test/mcp/", None]
+)
+def test_token_for_this_resource_or_none_authenticates(client, resource):
+    token = _bearer_token_for(client, resource)
+    resp = client.get("/mcp", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code != 401
+
+
+def test_authorize_with_foreign_resource_redirects_with_invalid_target(client):
+    client_info = _register_client(client)
+    _, challenge = _code_verifier_and_challenge()
+    resp = client.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_info["client_id"],
+            "redirect_uri": "https://claude.example/callback",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "state": "abc123",
+            "resource": "https://other.example/mcp",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert location.startswith("https://claude.example/callback")
+    assert "error=invalid_target" in location
+
+
+def _store_access_token(module, token: str, resource: str | None) -> None:
+    import time
+
+    from mcp.server.auth.provider import AccessToken
+
+    module._token_store.put(
+        "access_tokens",
+        token,
+        AccessToken(
+            token=token,
+            client_id="client-1",
+            scopes=[],
+            expires_at=int(time.time()) + 600,
+            resource=resource,
+            subject="123",
+        ).model_dump(mode="json"),
+    )
+
+
+def test_legacy_token_without_resource_still_authenticates(http_mcp_server, client):
+    _store_access_token(http_mcp_server, "legacy-token", None)
+    resp = client.get("/mcp", headers={"Authorization": "Bearer legacy-token"})
+    assert resp.status_code != 401
+
+
+def test_token_bound_to_foreign_resource_is_rejected(http_mcp_server, client):
+    _store_access_token(http_mcp_server, "foreign-token", "https://other.example/mcp")
+    resp = client.get("/mcp", headers={"Authorization": "Bearer foreign-token"})
+    assert resp.status_code == 401
